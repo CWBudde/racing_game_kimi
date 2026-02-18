@@ -3,94 +3,130 @@ import { useFrame } from '@react-three/fiber';
 import { RigidBody, CuboidCollider } from '@react-three/rapier';
 import * as THREE from 'three';
 
-// Generate track points as a smooth closed circuit (rounded rectangle / racetrack oval)
+// ── Racing circuit layout via control points ──
+// A proper GP-style circuit with varied corners: fast sweepers, a hairpin,
+// S-curves, and long straights.
+const CONTROL_POINTS = [
+  // Main straight (car starts here, heading +Z)
+  new THREE.Vector3(-50, 0, -55),
+  new THREE.Vector3(-50, 0, 25),
+  // Turn 1 — fast right sweeper
+  new THREE.Vector3(-42, 0, 65),
+  new THREE.Vector3(-10, 0, 100),
+  new THREE.Vector3(30, 0, 108),
+  // Turn 2 — medium right
+  new THREE.Vector3(65, 0, 92),
+  new THREE.Vector3(85, 0, 60),
+  // Short straight into hairpin
+  new THREE.Vector3(88, 0, 28),
+  // Turn 3 — hairpin right
+  new THREE.Vector3(85, 0, -2),
+  new THREE.Vector3(108, 0, -25),
+  new THREE.Vector3(85, 0, -48),
+  // S-curves
+  new THREE.Vector3(58, 0, -58),
+  new THREE.Vector3(32, 0, -42),
+  new THREE.Vector3(18, 0, -68),
+  // Turn 6 — long left sweeper toward finish
+  new THREE.Vector3(-8, 0, -90),
+  new THREE.Vector3(-38, 0, -102),
+  // Final section back to start
+  new THREE.Vector3(-60, 0, -92),
+  new THREE.Vector3(-70, 0, -72),
+];
+
+const TRACK_WIDTH = 20;
+const TRACK_SEGMENTS = 200;
+
+// Smooth closed spline through control points (centripetal avoids cusps)
+const trackCurve = new THREE.CatmullRomCurve3(
+  CONTROL_POINTS,
+  true,         // closed
+  'centripetal'
+);
+
 const generateTrackPoints = (): THREE.Vector3[] => {
-  const points: THREE.Vector3[] = [];
-  const segments = 120;
-
-  // Rounded-rectangle track: two straights connected by semicircles
-  const straightLength = 80; // length of each straight
-  const turnRadius = 35;     // radius of each semicircular turn
-  // Total perimeter: 2 * straightLength + 2 * PI * turnRadius
-  const perimeter = 2 * straightLength + 2 * Math.PI * turnRadius;
-
-  for (let i = 0; i < segments; i++) {
-    const d = (i / segments) * perimeter; // distance along track
-    let x: number, z: number;
-
-    if (d < straightLength) {
-      // Bottom straight (going in +Z direction)
-      x = -turnRadius;
-      z = -straightLength / 2 + d;
-    } else if (d < straightLength + Math.PI * turnRadius) {
-      // Right semicircle
-      const arcDist = d - straightLength;
-      const angle = arcDist / turnRadius; // 0 to PI
-      x = -turnRadius + turnRadius * Math.sin(angle);
-      z = straightLength / 2 + turnRadius * Math.cos(Math.PI - angle);
-    } else if (d < 2 * straightLength + Math.PI * turnRadius) {
-      // Top straight (going in -Z direction)
-      const straightDist = d - straightLength - Math.PI * turnRadius;
-      x = turnRadius;
-      z = straightLength / 2 - straightDist;
-    } else {
-      // Left semicircle
-      const arcDist = d - 2 * straightLength - Math.PI * turnRadius;
-      const angle = arcDist / turnRadius; // 0 to PI
-      x = turnRadius - turnRadius * Math.sin(angle);
-      z = -straightLength / 2 - turnRadius * Math.cos(Math.PI - angle);
-    }
-
-    points.push(new THREE.Vector3(x, 0, z));
-  }
-
-  return points;
+  const pts = trackCurve.getSpacedPoints(TRACK_SEGMENTS);
+  // getSpacedPoints returns N+1 points for a closed curve; drop the duplicate
+  return pts.slice(0, -1);
 };
 
-// Generate track width points for the road surface
-const generateTrackWidth = (points: THREE.Vector3[], width: number): { left: THREE.Vector3[]; right: THREE.Vector3[] } => {
+const generateTrackWidth = (
+  points: THREE.Vector3[],
+  width: number
+): { left: THREE.Vector3[]; right: THREE.Vector3[] } => {
   const left: THREE.Vector3[] = [];
   const right: THREE.Vector3[] = [];
-  
+
   for (let i = 0; i < points.length; i++) {
-    const current = points[i];
-    const next = points[(i + 1) % points.length];
     const prev = points[(i - 1 + points.length) % points.length];
-    
-    // Calculate tangent
+    const next = points[(i + 1) % points.length];
     const tangent = new THREE.Vector3().subVectors(next, prev).normalize();
-    
-    // Calculate normal (perpendicular to tangent, horizontal)
     const normal = new THREE.Vector3(-tangent.z, 0, tangent.x).normalize();
-    
-    left.push(current.clone().add(normal.clone().multiplyScalar(width / 2)));
-    right.push(current.clone().sub(normal.clone().multiplyScalar(width / 2)));
+
+    left.push(points[i].clone().add(normal.clone().multiplyScalar(width / 2)));
+    right.push(points[i].clone().sub(normal.clone().multiplyScalar(width / 2)));
   }
-  
+
   return { left, right };
 };
 
-// Pre-compute track points so we can derive start position for the car
+// Pre-compute so other modules can use them
 const TRACK_POINTS = generateTrackPoints();
-const TRACK_WIDTH = 20;
 const TRACK_SIDES = generateTrackWidth(TRACK_POINTS, TRACK_WIDTH);
+export { TRACK_POINTS };
 
-// Exported helper: get start position and yaw for the car
+// ── Car spawn helper ──
 export function getTrackStart(): { position: [number, number, number]; yaw: number } {
   const p0 = TRACK_POINTS[0];
-  const p1 = TRACK_POINTS[1];
-  const yaw = Math.atan2(p1.x - p0.x, p1.z - p0.z);
+  const p3 = TRACK_POINTS[3]; // look a few points ahead for a stable heading
+  const yaw = Math.atan2(p3.x - p0.x, p3.z - p0.z);
   return { position: [p0.x, p0.y + 2, p0.z], yaw };
 }
 
+// ── Road surface texture with lane markings ──
+const createRoadTexture = (): HTMLCanvasElement => {
+  const canvas = document.createElement('canvas');
+  canvas.width = 256;
+  canvas.height = 256;
+  const ctx = canvas.getContext('2d')!;
+
+  // Asphalt base
+  ctx.fillStyle = '#3a3a3a';
+  ctx.fillRect(0, 0, 256, 256);
+
+  // Fine grain noise for realism
+  for (let i = 0; i < 2000; i++) {
+    const x = Math.random() * 256;
+    const y = Math.random() * 256;
+    const b = 45 + Math.random() * 25;
+    ctx.fillStyle = `rgb(${b},${b},${b})`;
+    ctx.fillRect(x, y, 2, 2);
+  }
+
+  // White edge lines
+  ctx.fillStyle = '#dddddd';
+  ctx.fillRect(0, 0, 8, 256);       // left edge
+  ctx.fillRect(248, 0, 8, 256);     // right edge
+
+  // Dashed center line
+  ctx.fillStyle = '#cccccc';
+  for (let y = 0; y < 256; y += 48) {
+    ctx.fillRect(124, y, 8, 28);
+  }
+
+  return canvas;
+};
+
+// ── Track component ──
 export function Track() {
   const trackRef = useRef<THREE.Group>(null);
   const checkpointsRef = useRef<THREE.Group>(null);
 
   const trackPoints = TRACK_POINTS;
   const { left, right } = TRACK_SIDES;
-  
-  // Create track geometry (closed loop)
+
+  // Road surface geometry (closed-loop quad strip with distance-based UVs)
   const trackGeometry = useMemo(() => {
     const geometry = new THREE.BufferGeometry();
     const vertices: number[] = [];
@@ -98,27 +134,30 @@ export function Track() {
     const indices: number[] = [];
     const n = trackPoints.length;
 
+    let cumulativeV = 0;
     for (let i = 0; i < n; i++) {
       const ni = (i + 1) % n;
-      const l1 = left[i];
-      const l2 = left[ni];
-      const r1 = right[i];
-      const r2 = right[ni];
+      const segLen = trackPoints[i].distanceTo(trackPoints[ni]);
+      const vScale = 8; // world units per texture repeat
+      const v0 = cumulativeV / vScale;
+      const v1 = (cumulativeV + segLen) / vScale;
 
       const baseIndex = i * 4;
 
-      vertices.push(l1.x, l1.y, l1.z);
-      vertices.push(r1.x, r1.y, r1.z);
-      vertices.push(l2.x, l2.y, l2.z);
-      vertices.push(r2.x, r2.y, r2.z);
+      vertices.push(left[i].x, left[i].y, left[i].z);
+      vertices.push(right[i].x, right[i].y, right[i].z);
+      vertices.push(left[ni].x, left[ni].y, left[ni].z);
+      vertices.push(right[ni].x, right[ni].y, right[ni].z);
 
-      uvs.push(0, i / n);
-      uvs.push(1, i / n);
-      uvs.push(0, (i + 1) / n);
-      uvs.push(1, (i + 1) / n);
+      uvs.push(0, v0);
+      uvs.push(1, v0);
+      uvs.push(0, v1);
+      uvs.push(1, v1);
 
       indices.push(baseIndex, baseIndex + 1, baseIndex + 2);
       indices.push(baseIndex + 1, baseIndex + 3, baseIndex + 2);
+
+      cumulativeV += segLen;
     }
 
     geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
@@ -128,33 +167,42 @@ export function Track() {
 
     return geometry;
   }, [trackPoints, left, right]);
-  
-  // Create grass/ground geometry
-  const groundGeometry = useMemo(() => {
-    return new THREE.PlaneGeometry(300, 300, 1, 1);
+
+  // Road texture
+  const roadTexture = useMemo(() => {
+    const canvas = createRoadTexture();
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.wrapS = THREE.ClampToEdgeWrapping;
+    texture.wrapT = THREE.RepeatWrapping;
+    return texture;
   }, []);
-  
-  // Create checkpoint positions
+
+  // Ground plane — much larger than the track
+  const groundGeometry = useMemo(() => {
+    return new THREE.PlaneGeometry(1200, 1200, 1, 1);
+  }, []);
+
+  // Checkpoints evenly spaced around the circuit
   const checkpoints = useMemo(() => {
     const cp: { position: [number, number, number]; rotation: [number, number, number] }[] = [];
     const numCheckpoints = 8;
-    
+
     for (let i = 0; i < numCheckpoints; i++) {
       const idx = Math.floor((i / numCheckpoints) * trackPoints.length);
       const point = trackPoints[idx];
       const nextPoint = trackPoints[(idx + 1) % trackPoints.length];
-      
       const angle = Math.atan2(nextPoint.x - point.x, nextPoint.z - point.z);
-      
+
       cp.push({
         position: [point.x, point.y + 3, point.z],
-        rotation: [0, angle, 0]
+        rotation: [0, angle, 0],
       });
     }
-    
+
     return cp;
   }, [trackPoints]);
-  
+
+  // Animate checkpoint rings
   useFrame(({ clock }) => {
     if (checkpointsRef.current) {
       checkpointsRef.current.children.forEach((child, i) => {
@@ -162,10 +210,10 @@ export function Track() {
       });
     }
   });
-  
+
   return (
     <group ref={trackRef}>
-      {/* Ground/Grass */}
+      {/* ── Ground / Grass ── */}
       <RigidBody type="fixed" colliders={false}>
         <mesh
           geometry={groundGeometry}
@@ -173,80 +221,103 @@ export function Track() {
           position={[0, -0.1, 0]}
           receiveShadow
         >
-          <meshStandardMaterial
-            color="#4a7c59"
-            roughness={0.9}
-          />
+          <meshStandardMaterial color="#4a7c59" roughness={0.9} />
         </mesh>
-        <CuboidCollider args={[150, 0.5, 150]} position={[0, -0.6, 0]} />
+        <CuboidCollider args={[600, 0.5, 600]} position={[0, -0.6, 0]} />
       </RigidBody>
-      
-      {/* Road Surface */}
+
+      {/* ── Road Surface ── */}
       <RigidBody type="fixed" colliders="trimesh" friction={0.8}>
         <mesh geometry={trackGeometry} receiveShadow castShadow>
           <meshStandardMaterial
-            color="#333333"
+            map={roadTexture}
             roughness={0.7}
             metalness={0.1}
           />
         </mesh>
       </RigidBody>
-      
-      {/* Track Borders - walls every 6th point to avoid overlapping colliders */}
+
+      {/* ── Track Curbs — low red/white kerbs along both edges ── */}
+      {trackPoints.map((_, i) => {
+        if (i % 5 !== 0) return null;
+        const ni = (i + 1) % trackPoints.length;
+        const angle = Math.atan2(
+          trackPoints[ni].x - trackPoints[i].x,
+          trackPoints[ni].z - trackPoints[i].z
+        );
+        const isRed = Math.floor(i / 5) % 2 === 0;
+
+        return (
+          <group key={`curb-${i}`}>
+            {/* Left kerb */}
+            <mesh position={[left[i].x, 0.08, left[i].z]} rotation={[0, angle, 0]}>
+              <boxGeometry args={[1.5, 0.15, 3]} />
+              <meshStandardMaterial color={isRed ? '#cc2222' : '#ffffff'} />
+            </mesh>
+            {/* Right kerb */}
+            <mesh position={[right[i].x, 0.08, right[i].z]} rotation={[0, angle, 0]}>
+              <boxGeometry args={[1.5, 0.15, 3]} />
+              <meshStandardMaterial color={isRed ? '#cc2222' : '#ffffff'} />
+            </mesh>
+          </group>
+        );
+      })}
+
+      {/* ── Barrier Walls — collision boundaries every 6th point ── */}
       {trackPoints.map((_, i) => {
         if (i % 6 !== 0) return null;
-        const next = trackPoints[(i + 1) % trackPoints.length];
+        const ni = (i + 1) % trackPoints.length;
         const curr = trackPoints[i];
+        const next = trackPoints[ni];
         const angle = Math.atan2(next.x - curr.x, next.z - curr.z);
-        const segLen = curr.distanceTo(next) * 6; // cover gap to next wall
+        const segLen = curr.distanceTo(next) * 6;
+
         return (
-          <group key={`border-${i}`}>
-            {/* Left wall */}
+          <group key={`barrier-${i}`}>
+            {/* Left barrier */}
             <RigidBody type="fixed" position={[left[i].x, 0.5, left[i].z]} rotation={[0, angle, 0]}>
               <mesh castShadow>
-                <boxGeometry args={[0.6, 1.0, segLen]} />
-                <meshStandardMaterial color={i % 12 === 0 ? '#cc3333' : '#ffffff'} />
+                <boxGeometry args={[0.5, 1.0, segLen]} />
+                <meshStandardMaterial color={i % 12 === 0 ? '#cc3333' : '#bbbbbb'} />
               </mesh>
-              <CuboidCollider args={[0.3, 0.5, segLen / 2]} />
+              <CuboidCollider args={[0.25, 0.5, segLen / 2]} />
             </RigidBody>
-            {/* Right wall */}
+            {/* Right barrier */}
             <RigidBody type="fixed" position={[right[i].x, 0.5, right[i].z]} rotation={[0, angle, 0]}>
               <mesh castShadow>
-                <boxGeometry args={[0.6, 1.0, segLen]} />
-                <meshStandardMaterial color={i % 12 === 0 ? '#cc3333' : '#ffffff'} />
+                <boxGeometry args={[0.5, 1.0, segLen]} />
+                <meshStandardMaterial color={i % 12 === 0 ? '#cc3333' : '#bbbbbb'} />
               </mesh>
-              <CuboidCollider args={[0.3, 0.5, segLen / 2]} />
+              <CuboidCollider args={[0.25, 0.5, segLen / 2]} />
             </RigidBody>
           </group>
         );
       })}
-      
-      {/* Checkpoints */}
+
+      {/* ── Checkpoints ── */}
       <group ref={checkpointsRef}>
         {checkpoints.map((cp, i) => (
           <group key={`checkpoint-${i}`} position={cp.position}>
-            {/* Checkpoint arch */}
             <mesh castShadow>
               <torusGeometry args={[4, 0.3, 8, 32]} />
-              <meshStandardMaterial 
-                color="#ffdd00" 
+              <meshStandardMaterial
+                color="#ffdd00"
                 emissive="#ffaa00"
                 emissiveIntensity={0.3}
               />
             </mesh>
-            {/* Floating particles */}
             {[...Array(6)].map((_, j) => (
-              <mesh 
+              <mesh
                 key={j}
                 position={[
-                  Math.sin(j * Math.PI / 3) * 3,
-                  Math.cos(j * Math.PI / 3) * 1.5,
-                  0
+                  Math.sin((j * Math.PI) / 3) * 3,
+                  Math.cos((j * Math.PI) / 3) * 1.5,
+                  0,
                 ]}
               >
                 <sphereGeometry args={[0.2, 8, 8]} />
-                <meshStandardMaterial 
-                  color="#ffff00" 
+                <meshStandardMaterial
+                  color="#ffff00"
                   emissive="#ffff00"
                   emissiveIntensity={0.5}
                 />
@@ -255,22 +326,34 @@ export function Track() {
           </group>
         ))}
       </group>
-      
-      {/* Start/Finish Line */}
+
+      {/* ── Start / Finish Line ── */}
       <group position={[trackPoints[0].x, trackPoints[0].y + 0.1, trackPoints[0].z]}>
-        <mesh rotation={[-Math.PI / 2, Math.atan2(trackPoints[1].x - trackPoints[0].x, trackPoints[1].z - trackPoints[0].z), 0]} receiveShadow>
+        <mesh
+          rotation={[
+            -Math.PI / 2,
+            Math.atan2(
+              trackPoints[1].x - trackPoints[0].x,
+              trackPoints[1].z - trackPoints[0].z
+            ),
+            0,
+          ]}
+          receiveShadow
+        >
           <planeGeometry args={[20, 6]} />
           <meshStandardMaterial>
-            <canvasTexture 
-              attach="map" 
+            <canvasTexture
+              attach="map"
               image={(() => {
                 const canvas = document.createElement('canvas');
                 canvas.width = 256;
                 canvas.height = 64;
                 const ctx = canvas.getContext('2d')!;
-                for (let i = 0; i < 8; i++) {
-                  ctx.fillStyle = i % 2 === 0 ? '#ffffff' : '#000000';
-                  ctx.fillRect(i * 32, 0, 32, 64);
+                for (let r = 0; r < 2; r++) {
+                  for (let c = 0; c < 8; c++) {
+                    ctx.fillStyle = (r + c) % 2 === 0 ? '#ffffff' : '#000000';
+                    ctx.fillRect(c * 32, r * 32, 32, 32);
+                  }
                 }
                 return canvas;
               })()}
