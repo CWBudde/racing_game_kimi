@@ -7,6 +7,7 @@ import { Car } from './components/Car';
 import { CameraController } from './components/CameraController';
 import { Environment } from './components/Environment';
 import { GameUI } from './components/GameUI';
+import { MobileController } from './components/MobileController';
 import { useGameStore } from './store/gameStore';
 import './App.css';
 
@@ -84,6 +85,7 @@ function App() {
       
       {/* UI Overlay */}
       <GameUI />
+      <MobileController />
     </div>
   );
 }
