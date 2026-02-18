@@ -22,22 +22,23 @@ export function Car({ position = [0, 2, 0] }: CarProps) {
   const carRef = useRef<RapierRigidBody>(null);
   const chassisRef = useRef<THREE.Group>(null);
   const wheelsRef = useRef<THREE.Group>(null);
-  
+
   const { isPlaying, isPaused, updateSpeed, updateCarPosition, updateCarRotation, boostAmount, updateBoost } = useGameStore();
-  
+
   const [localSpeed, setLocalSpeed] = useState(0);
-  const [steering, setSteering] = useState(0);
-  
+  const steeringRef = useRef(0);
+
   // Car physics constants
   const MAX_SPEED = 60;
   const MAX_REVERSE_SPEED = 20;
   const ACCELERATION = 30;
   const DECELERATION = 15;
   const BRAKE_FORCE = 50;
-  const STEERING_SPEED = 2.5;
-  const MAX_STEERING_ANGLE = 0.5;
+  const STEERING_SPEED = 3.0;
+  const MAX_STEERING_ANGLE = 0.6;
   const BOOST_MULTIPLIER = 1.5;
-  
+  const LATERAL_GRIP = 0.92; // How much lateral velocity is killed per frame (tire grip)
+
   // Setup keyboard listeners
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -49,7 +50,7 @@ export function Car({ position = [0, 2, 0] }: CarProps) {
       if (key === ' ') keys.space = true;
       if (key === 'shift') keys.shift = true;
     };
-    
+
     const handleKeyUp = (e: KeyboardEvent) => {
       const key = e.key.toLowerCase();
       if (key === 'w' || key === 'arrowup') keys.w = false;
@@ -59,54 +60,66 @@ export function Car({ position = [0, 2, 0] }: CarProps) {
       if (key === ' ') keys.space = false;
       if (key === 'shift') keys.shift = false;
     };
-    
+
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
-    
+
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
   }, []);
-  
+
+  // Helper to extract Y-axis euler angle from a quaternion
+  const getYawFromQuaternion = (q: { x: number; y: number; z: number; w: number }): number => {
+    return Math.atan2(2 * (q.w * q.y + q.x * q.z), 1 - 2 * (q.y * q.y + q.z * q.z));
+  };
+
   // Physics update
   useFrame((_, delta) => {
     if (!carRef.current || !isPlaying || isPaused) return;
-    
+
+    // Clamp delta to avoid physics explosions on tab-switch
+    const dt = Math.min(delta, 0.05);
+
     const car = carRef.current;
     const currentVel = car.linvel();
     const currentRot = car.rotation();
-    
-    // Get forward direction
-    const forward = new THREE.Vector3(0, 0, 1).applyQuaternion(
-      new THREE.Quaternion(currentRot.x, currentRot.y, currentRot.z, currentRot.w)
-    );
-    
-    // Calculate current speed in forward direction
+
+    // Extract proper yaw angle from quaternion
+    const yaw = getYawFromQuaternion(currentRot);
+
+    // Get forward direction from yaw (not from quaternion directly - avoids tilt issues)
+    const forward = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw));
+    const right = new THREE.Vector3(Math.cos(yaw), 0, -Math.sin(yaw));
+
+    // Calculate current speed in forward direction (signed: positive = forward)
     const forwardSpeed = currentVel.x * forward.x + currentVel.z * forward.z;
+    const lateralSpeed = currentVel.x * right.x + currentVel.z * right.z;
     const speed = Math.sqrt(currentVel.x ** 2 + currentVel.z ** 2);
-    
-    // Update steering
+
+    // Update steering using ref (immediate, no React state delay)
     let targetSteering = 0;
     if (keys.a) targetSteering = MAX_STEERING_ANGLE;
     if (keys.d) targetSteering = -MAX_STEERING_ANGLE;
-    setSteering(prev => prev + (targetSteering - prev) * delta * 5);
-    
+
+    const steerLerp = 1 - Math.pow(0.01, dt); // frame-rate independent smoothing
+    steeringRef.current += (targetSteering - steeringRef.current) * steerLerp;
+    const currentSteering = steeringRef.current;
+
     // Apply acceleration/braking
     let acceleration = 0;
-    
+
     if (keys.w) {
-      // Accelerate forward
       const boost = keys.shift && boostAmount > 0 ? BOOST_MULTIPLIER : 1;
       if (keys.shift && boostAmount > 0) {
-        updateBoost(boostAmount - delta * 20);
+        updateBoost(boostAmount - dt * 20);
       }
-      
+
       if (forwardSpeed < MAX_SPEED * boost) {
         acceleration = ACCELERATION * boost;
       }
     } else if (keys.s) {
-      // Reverse/brake
       if (forwardSpeed > 0.5) {
         acceleration = -BRAKE_FORCE;
       } else if (forwardSpeed > -MAX_REVERSE_SPEED) {
@@ -118,74 +131,108 @@ export function Car({ position = [0, 2, 0] }: CarProps) {
         acceleration = -Math.sign(forwardSpeed) * DECELERATION;
       }
     }
-    
-    // Apply handbrake
+
+    // Apply handbrake - reduce grip dramatically for drifting
+    const grip = keys.space ? 0.6 : LATERAL_GRIP;
     if (keys.space) {
-      car.setLinvel({ 
-        x: currentVel.x * 0.95, 
-        y: currentVel.y, 
-        z: currentVel.z * 0.95 
+      car.setLinvel({
+        x: currentVel.x * 0.97,
+        y: currentVel.y,
+        z: currentVel.z * 0.97
       }, true);
     }
-    
-    // Apply acceleration force
+
+    // Apply acceleration force along forward direction
     if (Math.abs(acceleration) > 0.1) {
-      const force = forward.clone().multiplyScalar(acceleration * delta * 100);
+      const forceMag = acceleration * dt * 500; // mass=500, so effective accel = acceleration
+      const force = forward.clone().multiplyScalar(forceMag);
       car.applyImpulse({ x: force.x, y: 0, z: force.z }, true);
     }
-    
-    // Apply steering (only when moving)
-    if (Math.abs(speed) > 0.5 && Math.abs(steering) > 0.01) {
-      const turnAmount = steering * delta * STEERING_SPEED * Math.min(speed / 10, 1);
-      const currentRotation = new THREE.Quaternion(
-        currentRot.x, currentRot.y, currentRot.z, currentRot.w
-      );
-      const turnQuaternion = new THREE.Quaternion().setFromAxisAngle(
+
+    // Apply steering rotation (only when moving)
+    if (Math.abs(speed) > 0.5 && Math.abs(currentSteering) > 0.01) {
+      // Invert steering when reversing so car behaves like a real vehicle
+      const steerSign = forwardSpeed >= 0 ? 1 : -1;
+      // Reduce turning at very high speed for stability
+      const speedFactor = Math.min(speed / 8, 1) * Math.max(1 - speed / 120, 0.3);
+      const turnAmount = currentSteering * dt * STEERING_SPEED * speedFactor * steerSign;
+
+      // Build new rotation from clean yaw + turn
+      const newYaw = yaw - turnAmount;
+      const newRotation = new THREE.Quaternion().setFromAxisAngle(
         new THREE.Vector3(0, 1, 0),
-        -turnAmount
+        newYaw
       );
-      currentRotation.multiply(turnQuaternion);
       car.setRotation(
-        { x: currentRotation.x, y: currentRotation.y, z: currentRotation.z, w: currentRotation.w },
+        { x: newRotation.x, y: newRotation.y, z: newRotation.z, w: newRotation.w },
         true
       );
+
+      // Redirect velocity to match new orientation (tire grip simulation)
+      // Decompose velocity into new forward/lateral components
+      const newForward = new THREE.Vector3(Math.sin(newYaw), 0, Math.cos(newYaw));
+      const newRight = new THREE.Vector3(Math.cos(newYaw), 0, -Math.sin(newYaw));
+      const newForwardSpeed = currentVel.x * newForward.x + currentVel.z * newForward.z;
+      const newLateralSpeed = currentVel.x * newRight.x + currentVel.z * newRight.z;
+
+      // Kill most lateral velocity (grip), keep forward velocity
+      const correctedVel = newForward.clone().multiplyScalar(newForwardSpeed)
+        .add(newRight.clone().multiplyScalar(newLateralSpeed * (1 - grip)));
+      car.setLinvel({ x: correctedVel.x, y: currentVel.y, z: correctedVel.z }, true);
+    } else {
+      // Even when not steering, keep car upright and apply lateral grip
+      const uprightRot = new THREE.Quaternion().setFromAxisAngle(
+        new THREE.Vector3(0, 1, 0),
+        yaw
+      );
+      car.setRotation(
+        { x: uprightRot.x, y: uprightRot.y, z: uprightRot.z, w: uprightRot.w },
+        true
+      );
+
+      // Still apply lateral grip when going straight
+      if (Math.abs(lateralSpeed) > 0.1) {
+        const correctedVel = forward.clone().multiplyScalar(forwardSpeed)
+          .add(right.clone().multiplyScalar(lateralSpeed * (1 - grip)));
+        car.setLinvel({ x: correctedVel.x, y: currentVel.y, z: correctedVel.z }, true);
+      }
     }
-    
-    // Keep car upright
+
+    // Get position for store update
     const pos = car.translation();
-    car.setRotation({ x: 0, y: currentRot.y, z: 0, w: currentRot.w }, true);
-    
-    // Update store values
+
+    // Update store values - pass proper yaw angle (not quaternion component)
+    const finalYaw = getYawFromQuaternion(car.rotation());
     const speedKmh = Math.abs(forwardSpeed) * 3.6;
     updateSpeed(speedKmh);
     setLocalSpeed(speedKmh);
     updateCarPosition([pos.x, pos.y, pos.z]);
-    updateCarRotation([0, currentRot.y, 0]);
-    
+    updateCarRotation([0, finalYaw, 0]);
+
     // Regenerate boost slowly
     if (!keys.shift && boostAmount < 100) {
-      updateBoost(boostAmount + delta * 5);
+      updateBoost(boostAmount + dt * 5);
     }
-    
+
     // Animate wheels
     if (wheelsRef.current) {
       wheelsRef.current.children.forEach((wheel, i) => {
         // Rotate wheels based on speed
-        wheel.rotation.x += speed * delta * 0.5;
-        
+        wheel.rotation.x += forwardSpeed * dt * 0.5;
+
         // Steer front wheels
         if (i < 2) {
-          wheel.rotation.y = steering;
+          wheel.rotation.y = currentSteering;
         }
       });
     }
-    
-    // Chassis tilt based on acceleration
+
+    // Chassis tilt based on acceleration and steering
     if (chassisRef.current) {
-      const tiltX = Math.min(Math.max(-acceleration * 0.01, -0.1), 0.1);
-      const tiltZ = Math.min(Math.max(steering * speed * 0.001, -0.1), 0.1);
-      chassisRef.current.rotation.x = tiltX;
-      chassisRef.current.rotation.z = tiltZ;
+      const tiltX = Math.min(Math.max(-acceleration * 0.003, -0.08), 0.08);
+      const tiltZ = Math.min(Math.max(currentSteering * speed * 0.002, -0.1), 0.1);
+      chassisRef.current.rotation.x += (tiltX - chassisRef.current.rotation.x) * 0.1;
+      chassisRef.current.rotation.z += (tiltZ - chassisRef.current.rotation.z) * 0.1;
     }
   });
   
