@@ -2,7 +2,7 @@ import { useEffect, useCallback } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { Physics } from '@react-three/rapier';
 import { Stars } from '@react-three/drei';
-import { Track } from './components/Track';
+import { Track, getTrackStart } from './components/Track';
 import { Car } from './components/Car';
 import { CameraController } from './components/CameraController';
 import { Environment } from './components/Environment';
@@ -38,8 +38,8 @@ function GameScene() {
         {/* Track */}
         <Track />
         
-        {/* Player Car */}
-        <Car position={[0, 2, 0]} />
+        {/* Player Car - spawn on track at start/finish line */}
+        <Car position={getTrackStart().position} />
         
         {/* Environment */}
         <Environment />

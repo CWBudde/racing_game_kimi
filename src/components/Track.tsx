@@ -3,20 +3,51 @@ import { useFrame } from '@react-three/fiber';
 import { RigidBody, CuboidCollider } from '@react-three/rapier';
 import * as THREE from 'three';
 
-// Generate track points in a figure-8 or oval shape
+// Generate track points as a smooth closed circuit (rounded rectangle / racetrack oval)
 const generateTrackPoints = (): THREE.Vector3[] => {
   const points: THREE.Vector3[] = [];
-  const segments = 100;
-  
-  for (let i = 0; i <= segments; i++) {
+  const segments = 120;
+
+  // Rounded-rectangle track: two straights connected by semicircles
+  const straightLength = 80; // length of each straight
+  const turnRadius = 35;     // radius of each semicircular turn
+  // Total perimeter: 2 * straightLength + 2 * PI * turnRadius
+  const perimeter = 2 * straightLength + 2 * Math.PI * turnRadius;
+
+  for (let i = 0; i < segments; i++) {
+    const d = (i / segments) * perimeter; // distance along track
+    let x: number, z: number;
+
+    if (d < straightLength) {
+      // Bottom straight (going in +Z direction)
+      x = -turnRadius;
+      z = -straightLength / 2 + d;
+    } else if (d < straightLength + Math.PI * turnRadius) {
+      // Right semicircle
+      const arcDist = d - straightLength;
+      const angle = arcDist / turnRadius; // 0 to PI
+      x = -turnRadius + turnRadius * Math.sin(angle);
+      z = straightLength / 2 + turnRadius * Math.cos(Math.PI - angle);
+    } else if (d < 2 * straightLength + Math.PI * turnRadius) {
+      // Top straight (going in -Z direction)
+      const straightDist = d - straightLength - Math.PI * turnRadius;
+      x = turnRadius;
+      z = straightLength / 2 - straightDist;
+    } else {
+      // Left semicircle
+      const arcDist = d - 2 * straightLength - Math.PI * turnRadius;
+      const angle = arcDist / turnRadius; // 0 to PI
+      x = turnRadius - turnRadius * Math.sin(angle);
+      z = -straightLength / 2 - turnRadius * Math.cos(Math.PI - angle);
+    }
+
+    // Slight elevation variation for visual interest
     const t = (i / segments) * Math.PI * 2;
-    // Figure-8 track shape
-    const x = Math.sin(t) * 60 + Math.sin(t * 3) * 15;
-    const z = Math.cos(t * 2) * 40;
-    const y = Math.sin(t * 4) * 2; // Slight elevation changes
+    const y = Math.sin(t * 2) * 1.5;
+
     points.push(new THREE.Vector3(x, y, z));
   }
-  
+
   return points;
 };
 
@@ -43,50 +74,62 @@ const generateTrackWidth = (points: THREE.Vector3[], width: number): { left: THR
   return { left, right };
 };
 
+// Pre-compute track points so we can derive start position for the car
+const TRACK_POINTS = generateTrackPoints();
+const TRACK_WIDTH = 20;
+const TRACK_SIDES = generateTrackWidth(TRACK_POINTS, TRACK_WIDTH);
+
+// Exported helper: get start position and yaw for the car
+export function getTrackStart(): { position: [number, number, number]; yaw: number } {
+  const p0 = TRACK_POINTS[0];
+  const p1 = TRACK_POINTS[1];
+  const yaw = Math.atan2(p1.x - p0.x, p1.z - p0.z);
+  return { position: [p0.x, p0.y + 2, p0.z], yaw };
+}
+
 export function Track() {
   const trackRef = useRef<THREE.Group>(null);
   const checkpointsRef = useRef<THREE.Group>(null);
+
+  const trackPoints = TRACK_POINTS;
+  const { left, right } = TRACK_SIDES;
   
-  const trackPoints = useMemo(() => generateTrackPoints(), []);
-  const { left, right } = useMemo(() => generateTrackWidth(trackPoints, 20), [trackPoints]);
-  
-  // Create track geometry
+  // Create track geometry (closed loop)
   const trackGeometry = useMemo(() => {
     const geometry = new THREE.BufferGeometry();
     const vertices: number[] = [];
     const uvs: number[] = [];
     const indices: number[] = [];
-    
-    for (let i = 0; i < trackPoints.length - 1; i++) {
+    const n = trackPoints.length;
+
+    for (let i = 0; i < n; i++) {
+      const ni = (i + 1) % n;
       const l1 = left[i];
-      const l2 = left[i + 1];
+      const l2 = left[ni];
       const r1 = right[i];
-      const r2 = right[i + 1];
-      
+      const r2 = right[ni];
+
       const baseIndex = i * 4;
-      
-      // Add vertices
+
       vertices.push(l1.x, l1.y, l1.z);
       vertices.push(r1.x, r1.y, r1.z);
       vertices.push(l2.x, l2.y, l2.z);
       vertices.push(r2.x, r2.y, r2.z);
-      
-      // Add UVs
-      uvs.push(0, i / trackPoints.length);
-      uvs.push(1, i / trackPoints.length);
-      uvs.push(0, (i + 1) / trackPoints.length);
-      uvs.push(1, (i + 1) / trackPoints.length);
-      
-      // Add indices (two triangles per segment)
+
+      uvs.push(0, i / n);
+      uvs.push(1, i / n);
+      uvs.push(0, (i + 1) / n);
+      uvs.push(1, (i + 1) / n);
+
       indices.push(baseIndex, baseIndex + 1, baseIndex + 2);
       indices.push(baseIndex + 1, baseIndex + 3, baseIndex + 2);
     }
-    
+
     geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
     geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
     geometry.setIndex(indices);
     geometry.computeVertexNormals();
-    
+
     return geometry;
   }, [trackPoints, left, right]);
   
@@ -173,21 +216,24 @@ export function Track() {
       {/* Track Borders */}
       {trackPoints.map((_, i) => {
         if (i % 3 !== 0) return null;
+        const next = trackPoints[(i + 1) % trackPoints.length];
+        const curr = trackPoints[i];
+        const angle = Math.atan2(next.x - curr.x, next.z - curr.z);
         return (
           <group key={`border-${i}`}>
             {/* Left curb */}
-            <RigidBody type="fixed" position={[left[i].x, left[i].y + 0.3, left[i].z]}>
+            <RigidBody type="fixed" position={[left[i].x, left[i].y + 0.3, left[i].z]} rotation={[0, angle, 0]}>
               <mesh castShadow>
                 <boxGeometry args={[1, 0.6, 4]} />
-                <meshStandardMaterial color="#cc3333" />
+                <meshStandardMaterial color={i % 6 === 0 ? '#cc3333' : '#ffffff'} />
               </mesh>
               <CuboidCollider args={[0.5, 0.3, 2]} />
             </RigidBody>
             {/* Right curb */}
-            <RigidBody type="fixed" position={[right[i].x, right[i].y + 0.3, right[i].z]}>
+            <RigidBody type="fixed" position={[right[i].x, right[i].y + 0.3, right[i].z]} rotation={[0, angle, 0]}>
               <mesh castShadow>
                 <boxGeometry args={[1, 0.6, 4]} />
-                <meshStandardMaterial color="#cc3333" />
+                <meshStandardMaterial color={i % 6 === 0 ? '#cc3333' : '#ffffff'} />
               </mesh>
               <CuboidCollider args={[0.5, 0.3, 2]} />
             </RigidBody>
@@ -232,7 +278,7 @@ export function Track() {
       
       {/* Start/Finish Line */}
       <group position={[trackPoints[0].x, trackPoints[0].y + 0.1, trackPoints[0].z]}>
-        <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+        <mesh rotation={[-Math.PI / 2, Math.atan2(trackPoints[1].x - trackPoints[0].x, trackPoints[1].z - trackPoints[0].z), 0]} receiveShadow>
           <planeGeometry args={[20, 6]} />
           <meshStandardMaterial>
             <canvasTexture 

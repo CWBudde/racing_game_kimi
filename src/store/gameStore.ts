@@ -1,5 +1,8 @@
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
+import { getTrackStart } from '../components/Track';
+
+const trackStart = getTrackStart();
 
 export interface GameState {
   // Game status
@@ -64,8 +67,8 @@ export const useGameStore = create<GameState>()(
     hasItem: false,
     currentItem: null,
     
-    carPosition: [0, 1, 0],
-    carRotation: [0, 0, 0],
+    carPosition: trackStart.position,
+    carRotation: [0, trackStart.yaw, 0],
     
     // Game flow actions
     startGame: () => set({ 
@@ -79,8 +82,8 @@ export const useGameStore = create<GameState>()(
       boostAmount: 100,
       hasItem: false,
       currentItem: null,
-      carPosition: [0, 1, 0],
-      carRotation: [0, 0, 0]
+      carPosition: trackStart.position,
+      carRotation: [0, trackStart.yaw, 0]
     }),
     
     pauseGame: () => set({ isPaused: true }),
@@ -99,8 +102,8 @@ export const useGameStore = create<GameState>()(
       boostAmount: 100,
       hasItem: false,
       currentItem: null,
-      carPosition: [0, 1, 0],
-      carRotation: [0, 0, 0]
+      carPosition: trackStart.position,
+      carRotation: [0, trackStart.yaw, 0]
     }),
     
     // Lap actions
