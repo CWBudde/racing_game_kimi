@@ -41,11 +41,7 @@ const generateTrackPoints = (): THREE.Vector3[] => {
       z = -straightLength / 2 - turnRadius * Math.cos(Math.PI - angle);
     }
 
-    // Slight elevation variation for visual interest
-    const t = (i / segments) * Math.PI * 2;
-    const y = Math.sin(t * 2) * 1.5;
-
-    points.push(new THREE.Vector3(x, y, z));
+    points.push(new THREE.Vector3(x, 0, z));
   }
 
   return points;
@@ -171,71 +167,55 @@ export function Track() {
     <group ref={trackRef}>
       {/* Ground/Grass */}
       <RigidBody type="fixed" colliders={false}>
-        <mesh 
-          geometry={groundGeometry} 
-          rotation={[-Math.PI / 2, 0, 0]} 
-          position={[0, -0.5, 0]}
+        <mesh
+          geometry={groundGeometry}
+          rotation={[-Math.PI / 2, 0, 0]}
+          position={[0, -0.1, 0]}
           receiveShadow
         >
-          <meshStandardMaterial 
-            color="#4a7c59" 
+          <meshStandardMaterial
+            color="#4a7c59"
             roughness={0.9}
           />
         </mesh>
-        <CuboidCollider args={[150, 0.5, 150]} position={[0, -1, 0]} />
+        <CuboidCollider args={[150, 0.5, 150]} position={[0, -0.6, 0]} />
       </RigidBody>
       
       {/* Road Surface */}
-      <RigidBody type="fixed" colliders={false}>
+      <RigidBody type="fixed" colliders="trimesh" friction={0.8}>
         <mesh geometry={trackGeometry} receiveShadow castShadow>
-          <meshStandardMaterial 
-            color="#333333" 
+          <meshStandardMaterial
+            color="#333333"
             roughness={0.7}
             metalness={0.1}
           />
         </mesh>
-        {/* Road collider - simplified as a series of boxes */}
-        {trackPoints.map((point, i) => {
-          if (i % 5 !== 0) return null; // Only every 5th point for performance
-          const nextPoint = trackPoints[(i + 1) % trackPoints.length];
-          const midPoint = point.clone().add(nextPoint).multiplyScalar(0.5);
-          const distance = point.distanceTo(nextPoint) * 5;
-          const angle = Math.atan2(nextPoint.x - point.x, nextPoint.z - point.z);
-          
-          return (
-            <CuboidCollider 
-              key={i}
-              args={[10, 0.5, distance / 2]}
-              position={[midPoint.x, midPoint.y, midPoint.z]}
-              rotation={[0, angle, 0]}
-            />
-          );
-        })}
       </RigidBody>
       
-      {/* Track Borders */}
+      {/* Track Borders - walls every 6th point to avoid overlapping colliders */}
       {trackPoints.map((_, i) => {
-        if (i % 3 !== 0) return null;
+        if (i % 6 !== 0) return null;
         const next = trackPoints[(i + 1) % trackPoints.length];
         const curr = trackPoints[i];
         const angle = Math.atan2(next.x - curr.x, next.z - curr.z);
+        const segLen = curr.distanceTo(next) * 6; // cover gap to next wall
         return (
           <group key={`border-${i}`}>
-            {/* Left curb */}
-            <RigidBody type="fixed" position={[left[i].x, left[i].y + 0.3, left[i].z]} rotation={[0, angle, 0]}>
+            {/* Left wall */}
+            <RigidBody type="fixed" position={[left[i].x, 0.5, left[i].z]} rotation={[0, angle, 0]}>
               <mesh castShadow>
-                <boxGeometry args={[1, 0.6, 4]} />
-                <meshStandardMaterial color={i % 6 === 0 ? '#cc3333' : '#ffffff'} />
+                <boxGeometry args={[0.6, 1.0, segLen]} />
+                <meshStandardMaterial color={i % 12 === 0 ? '#cc3333' : '#ffffff'} />
               </mesh>
-              <CuboidCollider args={[0.5, 0.3, 2]} />
+              <CuboidCollider args={[0.3, 0.5, segLen / 2]} />
             </RigidBody>
-            {/* Right curb */}
-            <RigidBody type="fixed" position={[right[i].x, right[i].y + 0.3, right[i].z]} rotation={[0, angle, 0]}>
+            {/* Right wall */}
+            <RigidBody type="fixed" position={[right[i].x, 0.5, right[i].z]} rotation={[0, angle, 0]}>
               <mesh castShadow>
-                <boxGeometry args={[1, 0.6, 4]} />
-                <meshStandardMaterial color={i % 6 === 0 ? '#cc3333' : '#ffffff'} />
+                <boxGeometry args={[0.6, 1.0, segLen]} />
+                <meshStandardMaterial color={i % 12 === 0 ? '#cc3333' : '#ffffff'} />
               </mesh>
-              <CuboidCollider args={[0.5, 0.3, 2]} />
+              <CuboidCollider args={[0.3, 0.5, segLen / 2]} />
             </RigidBody>
           </group>
         );

@@ -34,10 +34,9 @@ export function Car({ position = [0, 2, 0] }: CarProps) {
   const ACCELERATION = 30;
   const DECELERATION = 15;
   const BRAKE_FORCE = 50;
-  const STEERING_SPEED = 3.0;
-  const MAX_STEERING_ANGLE = 0.6;
+  const STEERING_SPEED = 4.0;
+  const MAX_STEERING_ANGLE = 0.5;
   const BOOST_MULTIPLIER = 1.5;
-  const LATERAL_GRIP = 0.92; // How much lateral velocity is killed per frame (tire grip)
 
   // Setup keyboard listeners
   useEffect(() => {
@@ -86,28 +85,29 @@ export function Car({ position = [0, 2, 0] }: CarProps) {
     const currentVel = car.linvel();
     const currentRot = car.rotation();
 
-    // Extract proper yaw angle from quaternion
+    // Extract yaw from quaternion
     const yaw = getYawFromQuaternion(currentRot);
 
-    // Get forward direction from yaw (not from quaternion directly - avoids tilt issues)
+    // Forward/right vectors from yaw only (ignore any tilt in quaternion)
     const forward = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw));
     const right = new THREE.Vector3(Math.cos(yaw), 0, -Math.sin(yaw));
 
-    // Calculate current speed in forward direction (signed: positive = forward)
+    // Speed decomposition
     const forwardSpeed = currentVel.x * forward.x + currentVel.z * forward.z;
     const lateralSpeed = currentVel.x * right.x + currentVel.z * right.z;
     const speed = Math.sqrt(currentVel.x ** 2 + currentVel.z ** 2);
 
-    // Update steering using ref (immediate, no React state delay)
+    // --- Steering input (smooth, frame-rate independent) ---
     let targetSteering = 0;
     if (keys.a) targetSteering = -MAX_STEERING_ANGLE;
     if (keys.d) targetSteering = MAX_STEERING_ANGLE;
 
-    const steerLerp = 1 - Math.pow(0.01, dt); // frame-rate independent smoothing
+    // Smooth steering with exponential interpolation
+    const steerLerp = 1 - Math.pow(0.001, dt);
     steeringRef.current += (targetSteering - steeringRef.current) * steerLerp;
     const currentSteering = steeringRef.current;
 
-    // Apply acceleration/braking
+    // --- Acceleration / braking ---
     let acceleration = 0;
 
     if (keys.w) {
@@ -115,7 +115,6 @@ export function Car({ position = [0, 2, 0] }: CarProps) {
       if (keys.shift && boostAmount > 0) {
         updateBoost(boostAmount - dt * 20);
       }
-
       if (forwardSpeed < MAX_SPEED * boost) {
         acceleration = ACCELERATION * boost;
       }
@@ -126,82 +125,65 @@ export function Car({ position = [0, 2, 0] }: CarProps) {
         acceleration = -ACCELERATION * 0.5;
       }
     } else {
-      // Natural deceleration
+      // Natural deceleration (drag)
       if (Math.abs(forwardSpeed) > 0.1) {
         acceleration = -Math.sign(forwardSpeed) * DECELERATION;
       }
     }
 
-    // Apply handbrake - reduce grip dramatically for drifting
-    const grip = keys.space ? 0.6 : LATERAL_GRIP;
-    if (keys.space) {
-      car.setLinvel({
-        x: currentVel.x * 0.97,
-        y: currentVel.y,
-        z: currentVel.z * 0.97
-      }, true);
-    }
-
-    // Apply acceleration force along forward direction
+    // Apply acceleration as impulse along forward direction
     if (Math.abs(acceleration) > 0.1) {
-      const forceMag = acceleration * dt * 500; // mass=500, so effective accel = acceleration
-      const force = forward.clone().multiplyScalar(forceMag);
-      car.applyImpulse({ x: force.x, y: 0, z: force.z }, true);
+      const forceMag = acceleration * dt * 500; // mass=500
+      car.applyImpulse({ x: forward.x * forceMag, y: 0, z: forward.z * forceMag }, true);
     }
 
-    // Apply steering rotation (only when moving)
+    // --- Steering via angular velocity (lets Rapier handle collision response) ---
     if (Math.abs(speed) > 0.5 && Math.abs(currentSteering) > 0.01) {
-      // Invert steering when reversing so car behaves like a real vehicle
+      // Invert steering when reversing
       const steerSign = forwardSpeed >= 0 ? 1 : -1;
-      // Reduce turning at very high speed for stability
-      const speedFactor = Math.min(speed / 8, 1) * Math.max(1 - speed / 120, 0.3);
-      const turnAmount = currentSteering * dt * STEERING_SPEED * speedFactor * steerSign;
-
-      // Build new rotation from clean yaw + turn
-      const newYaw = yaw - turnAmount;
-      const newRotation = new THREE.Quaternion().setFromAxisAngle(
-        new THREE.Vector3(0, 1, 0),
-        newYaw
-      );
-      car.setRotation(
-        { x: newRotation.x, y: newRotation.y, z: newRotation.z, w: newRotation.w },
-        true
-      );
-
-      // Redirect velocity to match new orientation (tire grip simulation)
-      // Decompose velocity into new forward/lateral components
-      const newForward = new THREE.Vector3(Math.sin(newYaw), 0, Math.cos(newYaw));
-      const newRight = new THREE.Vector3(Math.cos(newYaw), 0, -Math.sin(newYaw));
-      const newForwardSpeed = currentVel.x * newForward.x + currentVel.z * newForward.z;
-      const newLateralSpeed = currentVel.x * newRight.x + currentVel.z * newRight.z;
-
-      // Kill most lateral velocity (grip), keep forward velocity
-      const correctedVel = newForward.clone().multiplyScalar(newForwardSpeed)
-        .add(newRight.clone().multiplyScalar(newLateralSpeed * (1 - grip)));
-      car.setLinvel({ x: correctedVel.x, y: currentVel.y, z: correctedVel.z }, true);
+      // Turn rate scales with speed: ramps up from 0, reduces at high speed
+      const speedFactor = Math.min(speed / 10, 1) * Math.max(1 - speed / 150, 0.25);
+      const angularVelY = -currentSteering * STEERING_SPEED * speedFactor * steerSign;
+      car.setAngvel({ x: 0, y: angularVelY, z: 0 }, true);
     } else {
-      // Even when not steering, keep car upright and apply lateral grip
-      const uprightRot = new THREE.Quaternion().setFromAxisAngle(
-        new THREE.Vector3(0, 1, 0),
-        yaw
-      );
-      car.setRotation(
-        { x: uprightRot.x, y: uprightRot.y, z: uprightRot.z, w: uprightRot.w },
-        true
-      );
-
-      // Still apply lateral grip when going straight
-      if (Math.abs(lateralSpeed) > 0.1) {
-        const correctedVel = forward.clone().multiplyScalar(forwardSpeed)
-          .add(right.clone().multiplyScalar(lateralSpeed * (1 - grip)));
-        car.setLinvel({ x: correctedVel.x, y: currentVel.y, z: correctedVel.z }, true);
-      }
+      // No steering input — stop angular rotation
+      car.setAngvel({ x: 0, y: 0, z: 0 }, true);
     }
 
-    // Get position for store update
-    const pos = car.translation();
+    // --- Lateral grip: gently redirect velocity toward forward direction ---
+    // Instead of hard-setting linvel, apply a corrective impulse
+    if (Math.abs(lateralSpeed) > 0.2) {
+      const gripStrength = keys.space ? 0.4 : 0.85; // handbrake reduces grip
+      // Apply a lateral impulse opposing the slide
+      const correctionForce = -lateralSpeed * gripStrength * 500 * dt;
+      car.applyImpulse({ x: right.x * correctionForce, y: 0, z: right.z * correctionForce }, true);
+    }
 
-    // Update store values - pass proper yaw angle (not quaternion component)
+    // Handbrake: also slow down overall
+    if (keys.space) {
+      const dampedVel = {
+        x: currentVel.x * (1 - 1.5 * dt),
+        y: currentVel.y,
+        z: currentVel.z * (1 - 1.5 * dt)
+      };
+      car.setLinvel(dampedVel, true);
+    }
+
+    // --- Keep car upright (correct any pitch/roll from collisions) ---
+    const uprightRot = new THREE.Quaternion().setFromAxisAngle(
+      new THREE.Vector3(0, 1, 0),
+      yaw
+    );
+    // Slerp toward upright to avoid snapping
+    const currentQuat = new THREE.Quaternion(currentRot.x, currentRot.y, currentRot.z, currentRot.w);
+    currentQuat.slerp(uprightRot, 0.3);
+    car.setRotation(
+      { x: currentQuat.x, y: currentQuat.y, z: currentQuat.z, w: currentQuat.w },
+      true
+    );
+
+    // --- Update game state ---
+    const pos = car.translation();
     const finalYaw = getYawFromQuaternion(car.rotation());
     const speedKmh = Math.abs(forwardSpeed) * 3.6;
     updateSpeed(speedKmh);
@@ -214,20 +196,17 @@ export function Car({ position = [0, 2, 0] }: CarProps) {
       updateBoost(boostAmount + dt * 5);
     }
 
-    // Animate wheels
+    // --- Animate wheels ---
     if (wheelsRef.current) {
       wheelsRef.current.children.forEach((wheel, i) => {
-        // Rotate wheels based on speed
         wheel.rotation.x += forwardSpeed * dt * 0.5;
-
-        // Steer front wheels
         if (i < 2) {
           wheel.rotation.y = currentSteering;
         }
       });
     }
 
-    // Chassis tilt based on acceleration and steering
+    // --- Chassis tilt (cosmetic only) ---
     if (chassisRef.current) {
       const tiltX = Math.min(Math.max(-acceleration * 0.003, -0.08), 0.08);
       const tiltZ = Math.min(Math.max(currentSteering * speed * 0.002, -0.1), 0.1);
