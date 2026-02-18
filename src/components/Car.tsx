@@ -100,8 +100,8 @@ export function Car({ position = [0, 2, 0] }: CarProps) {
 
     // Update steering using ref (immediate, no React state delay)
     let targetSteering = 0;
-    if (keys.a) targetSteering = MAX_STEERING_ANGLE;
-    if (keys.d) targetSteering = -MAX_STEERING_ANGLE;
+    if (keys.a) targetSteering = -MAX_STEERING_ANGLE;
+    if (keys.d) targetSteering = MAX_STEERING_ANGLE;
 
     const steerLerp = 1 - Math.pow(0.01, dt); // frame-rate independent smoothing
     steeringRef.current += (targetSteering - steeringRef.current) * steerLerp;

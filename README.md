@@ -1,75 +1,69 @@
-# React + TypeScript + Vite
+# racing_game_kimi
 
-> Note: This repository is a one-shot experiment created with KIMI K2.5.
+This is a **one-shot experiment with KIMI K2.5** (Feb 2026): a small **3D kart racing prototype** built with React, Vite, and a Three.js + Rapier physics stack.
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+## What’s in here
 
-Currently, two official plugins are available:
+- Procedural track mesh + simple colliders
+- Physics-driven car (rigid body) with arcade-ish handling
+- Chase camera with speed-based FOV
+- HUD overlay (lap/time/speed/boost) + pause/menu screens
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## Controls
 
-## React Compiler
+- `W` / `↑`: accelerate
+- `S` / `↓`: brake / reverse
+- `A` / `←`: steer left
+- `D` / `→`: steer right
+- `SPACE`: handbrake (reduced grip)
+- `SHIFT`: boost (consumes boost meter)
+- `ESC`: pause / resume
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Run locally
 
-## Expanding the ESLint configuration
+Prereqs: Node.js 20+
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+Using Bun:
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+bun install
+bun run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+Using npm:
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install
+npm run dev
 ```
+
+Other scripts:
+
+- `bun run build` / `npm run build`
+- `bun run preview` / `npm run preview`
+- `bun run lint` / `npm run lint`
+
+## Tech stack
+
+- React + TypeScript + Vite
+- @react-three/fiber + three
+- @react-three/rapier (physics)
+- Zustand (game state)
+- Tailwind CSS (+ shadcn/ui components present in repo)
+
+## Code map
+
+- [src/App.tsx](src/App.tsx): Canvas + scene composition + ESC pause handler
+- [src/components/Car.tsx](src/components/Car.tsx): car physics + input
+- [src/components/Track.tsx](src/components/Track.tsx): procedural track mesh + colliders
+- [src/components/CameraController.tsx](src/components/CameraController.tsx): chase camera
+- [src/components/GameUI.tsx](src/components/GameUI.tsx): HUD + start/pause/game-over screens
+- [src/store/gameStore.ts](src/store/gameStore.ts): game state
+
+## Current state / limitations
+
+This is intentionally “prototype-y”. A few things are scaffolded but not fully wired yet:
+
+- Laps/checkpoints exist visually, but lap progression and race completion aren’t currently triggered.
+- Item boxes exist as sensors in the scene, but item pickup/use logic isn’t connected.
+
