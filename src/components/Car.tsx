@@ -8,8 +8,8 @@ interface CarProps {
   position?: [number, number, number];
 }
 
-// Input state
-const keys = {
+// Input state (exported so mobile controller can drive it)
+export const keys = {
   w: false,
   a: false,
   s: false,
