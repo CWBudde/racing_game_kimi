@@ -29,7 +29,7 @@ function GameScene() {
     <>
       {/* Sky */}
       <color attach="background" args={['#87CEEB']} />
-      <fog attach="fog" args={['#87CEEB', 50, 300]} />
+      <fog attach="fog" args={['#87CEEB', 100, 800]} />
       
       {/* Stars (visible at edges) */}
       <Stars radius={200} depth={50} count={1000} factor={4} saturation={0} fade speed={1} />
