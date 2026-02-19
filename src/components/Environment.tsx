@@ -1,11 +1,17 @@
-import { useRef, useMemo } from 'react';
-import { useFrame } from '@react-three/fiber';
-import { RigidBody, CuboidCollider } from '@react-three/rapier';
-import * as THREE from 'three';
-import { TRACK_POINTS } from './Track';
+import { useRef, useMemo } from "react";
+import { useFrame } from "@react-three/fiber";
+import { RigidBody, CuboidCollider } from "@react-three/rapier";
+import * as THREE from "three";
+import { TRACK_POINTS } from "./Track";
 
 // Tree component
-function Tree({ position, scale = 1 }: { position: [number, number, number]; scale?: number }) {
+function Tree({
+  position,
+  scale = 1,
+}: {
+  position: [number, number, number];
+  scale?: number;
+}) {
   return (
     <RigidBody type="fixed" position={position} colliders={false}>
       {/* Trunk */}
@@ -13,7 +19,10 @@ function Tree({ position, scale = 1 }: { position: [number, number, number]; sca
         <cylinderGeometry args={[0.3 * scale, 0.4 * scale, 3 * scale, 8]} />
         <meshStandardMaterial color="#8B4513" />
       </mesh>
-      <CuboidCollider args={[0.3 * scale, 1.5 * scale, 0.3 * scale]} position={[0, 1.5 * scale, 0]} />
+      <CuboidCollider
+        args={[0.3 * scale, 1.5 * scale, 0.3 * scale]}
+        position={[0, 1.5 * scale, 0]}
+      />
 
       {/* Leaves - bottom layer */}
       <mesh castShadow position={[0, 3.5 * scale, 0]}>
@@ -37,7 +46,13 @@ function Tree({ position, scale = 1 }: { position: [number, number, number]; sca
 }
 
 // Rock component
-function Rock({ position, scale = 1 }: { position: [number, number, number]; scale?: number }) {
+function Rock({
+  position,
+  scale = 1,
+}: {
+  position: [number, number, number];
+  scale?: number;
+}) {
   return (
     <RigidBody type="fixed" position={position} colliders={false}>
       <mesh castShadow>
@@ -50,12 +65,19 @@ function Rock({ position, scale = 1 }: { position: [number, number, number]; sca
 }
 
 // Cloud component
-function Cloud({ position, scale = 1 }: { position: [number, number, number]; scale?: number }) {
+function Cloud({
+  position,
+  scale = 1,
+}: {
+  position: [number, number, number];
+  scale?: number;
+}) {
   const cloudRef = useRef<THREE.Group>(null);
 
   useFrame(({ clock }) => {
     if (cloudRef.current) {
-      cloudRef.current.position.x += Math.sin(clock.getElapsedTime() * 0.1 + position[0]) * 0.01;
+      cloudRef.current.position.x +=
+        Math.sin(clock.getElapsedTime() * 0.1 + position[0]) * 0.01;
     }
   });
 
@@ -88,7 +110,8 @@ function ItemBox({ position }: { position: [number, number, number] }) {
   useFrame(({ clock }) => {
     if (boxRef.current) {
       boxRef.current.rotation.y = clock.getElapsedTime() * 2;
-      boxRef.current.position.y = position[1] + Math.sin(clock.getElapsedTime() * 3) * 0.3;
+      boxRef.current.position.y =
+        position[1] + Math.sin(clock.getElapsedTime() * 3) * 0.3;
     }
   });
 
@@ -109,17 +132,17 @@ function ItemBox({ position }: { position: [number, number, number] }) {
           <canvasTexture
             attach="map"
             image={(() => {
-              const canvas = document.createElement('canvas');
+              const canvas = document.createElement("canvas");
               canvas.width = 64;
               canvas.height = 64;
-              const ctx = canvas.getContext('2d')!;
-              ctx.fillStyle = '#ffdd00';
+              const ctx = canvas.getContext("2d")!;
+              ctx.fillStyle = "#ffdd00";
               ctx.fillRect(0, 0, 64, 64);
-              ctx.fillStyle = '#000000';
-              ctx.font = 'bold 45px Arial';
-              ctx.textAlign = 'center';
-              ctx.textBaseline = 'middle';
-              ctx.fillText('?', 32, 32);
+              ctx.fillStyle = "#000000";
+              ctx.font = "bold 45px Arial";
+              ctx.textAlign = "center";
+              ctx.textBaseline = "middle";
+              ctx.fillText("?", 32, 32);
               return canvas;
             })()}
           />
@@ -133,18 +156,15 @@ function ItemBox({ position }: { position: [number, number, number] }) {
 export function Environment() {
   // Generate tree positions — two rings: near-track and far-field
   const trees = useMemo(() => {
-    const positions: { position: [number, number, number]; scale: number }[] = [];
+    const positions: { position: [number, number, number]; scale: number }[] =
+      [];
 
     // Near-track trees (just outside the barriers)
     for (let i = 0; i < 30; i++) {
       const angle = (i / 30) * Math.PI * 2 + Math.random() * 0.4;
       const radius = 100 + Math.random() * 40;
       positions.push({
-        position: [
-          Math.cos(angle) * radius,
-          0,
-          Math.sin(angle) * radius,
-        ],
+        position: [Math.cos(angle) * radius, 0, Math.sin(angle) * radius],
         scale: 0.8 + Math.random() * 0.6,
       });
     }
@@ -154,11 +174,7 @@ export function Environment() {
       const angle = (i / 40) * Math.PI * 2 + Math.random() * 0.6;
       const radius = 160 + Math.random() * 200;
       positions.push({
-        position: [
-          Math.cos(angle) * radius,
-          0,
-          Math.sin(angle) * radius,
-        ],
+        position: [Math.cos(angle) * radius, 0, Math.sin(angle) * radius],
         scale: 1 + Math.random() * 1.0,
       });
     }
@@ -168,16 +184,13 @@ export function Environment() {
 
   // Generate rock positions — scattered around the landscape
   const rocks = useMemo(() => {
-    const positions: { position: [number, number, number]; scale: number }[] = [];
+    const positions: { position: [number, number, number]; scale: number }[] =
+      [];
     for (let i = 0; i < 25; i++) {
       const angle = (i / 25) * Math.PI * 2 + Math.random() * 0.8;
       const radius = 90 + Math.random() * 180;
       positions.push({
-        position: [
-          Math.cos(angle) * radius,
-          0.5,
-          Math.sin(angle) * radius,
-        ],
+        position: [Math.cos(angle) * radius, 0.5, Math.sin(angle) * radius],
         scale: 0.5 + Math.random() * 1.2,
       });
     }
@@ -186,7 +199,8 @@ export function Environment() {
 
   // Generate cloud positions — spread across the wider sky
   const clouds = useMemo(() => {
-    const positions: { position: [number, number, number]; scale: number }[] = [];
+    const positions: { position: [number, number, number]; scale: number }[] =
+      [];
     for (let i = 0; i < 16; i++) {
       positions.push({
         position: [
@@ -226,7 +240,11 @@ export function Environment() {
 
       {/* Clouds */}
       {clouds.map((cloud, i) => (
-        <Cloud key={`cloud-${i}`} position={cloud.position} scale={cloud.scale} />
+        <Cloud
+          key={`cloud-${i}`}
+          position={cloud.position}
+          scale={cloud.scale}
+        />
       ))}
 
       {/* Item Boxes */}
@@ -280,9 +298,7 @@ export function Environment() {
       <ambientLight intensity={0.4} />
 
       {/* Hemisphere light for sky/ground gradient */}
-      <hemisphereLight
-        args={['#87CEEB', '#4a7c59', 0.5]}
-      />
+      <hemisphereLight args={["#87CEEB", "#4a7c59", 0.5]} />
     </group>
   );
 }

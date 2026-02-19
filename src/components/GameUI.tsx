@@ -1,12 +1,12 @@
-import { useEffect, useState, useRef } from 'react';
-import { useGameStore } from '../store/gameStore';
+import { useEffect, useState, useRef } from "react";
+import { useGameStore } from "../store/gameStore";
 
 // Format time as MM:SS.ms
 const formatTime = (seconds: number): string => {
   const mins = Math.floor(seconds / 60);
   const secs = Math.floor(seconds % 60);
   const ms = Math.floor((seconds % 1) * 100);
-  return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}.${ms.toString().padStart(2, '0')}`;
+  return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}.${ms.toString().padStart(2, "0")}`;
 };
 
 export function GameUI() {
@@ -24,12 +24,12 @@ export function GameUI() {
     startGame,
     pauseGame,
     resumeGame,
-    resetGame
+    resetGame,
   } = useGameStore();
-  
+
   const [showControls, setShowControls] = useState(true);
   const controlsTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  
+
   // Hide controls after 5 seconds
   useEffect(() => {
     if (isPlaying && showControls) {
@@ -37,21 +37,21 @@ export function GameUI() {
         setShowControls(false);
       }, 5000);
     }
-    
+
     return () => {
       if (controlsTimeoutRef.current) {
         clearTimeout(controlsTimeoutRef.current);
       }
     };
   }, [isPlaying, showControls]);
-  
+
   // Show controls when game starts
   useEffect(() => {
     if (isPlaying) {
       setShowControls(true);
     }
   }, [isPlaying]);
-  
+
   // Start screen
   if (!isPlaying && !gameOver) {
     return (
@@ -61,19 +61,41 @@ export function GameUI() {
             <span className="text-yellow-400">KART</span> RACING
           </h1>
           <p className="text-gray-300 mb-6">3D Racing Adventure</p>
-          
+
           <div className="bg-black/30 p-4 rounded-lg mb-6 text-left">
             <h3 className="text-yellow-400 font-bold mb-2">Controls:</h3>
             <div className="grid grid-cols-2 gap-2 text-sm text-white">
-              <div><span className="bg-gray-700 px-2 py-1 rounded">W</span> / <span className="bg-gray-700 px-2 py-1 rounded">↑</span> Accelerate</div>
-              <div><span className="bg-gray-700 px-2 py-1 rounded">S</span> / <span className="bg-gray-700 px-2 py-1 rounded">↓</span> Brake/Reverse</div>
-              <div><span className="bg-gray-700 px-2 py-1 rounded">A</span> / <span className="bg-gray-700 px-2 py-1 rounded">←</span> Turn Left</div>
-              <div><span className="bg-gray-700 px-2 py-1 rounded">D</span> / <span className="bg-gray-700 px-2 py-1 rounded">→</span> Turn Right</div>
-              <div><span className="bg-gray-700 px-2 py-1 rounded">SPACE</span> Handbrake</div>
-              <div><span className="bg-gray-700 px-2 py-1 rounded">SHIFT</span> Boost</div>
+              <div>
+                <span className="bg-gray-700 px-2 py-1 rounded">W</span> /{" "}
+                <span className="bg-gray-700 px-2 py-1 rounded">↑</span>{" "}
+                Accelerate
+              </div>
+              <div>
+                <span className="bg-gray-700 px-2 py-1 rounded">S</span> /{" "}
+                <span className="bg-gray-700 px-2 py-1 rounded">↓</span>{" "}
+                Brake/Reverse
+              </div>
+              <div>
+                <span className="bg-gray-700 px-2 py-1 rounded">A</span> /{" "}
+                <span className="bg-gray-700 px-2 py-1 rounded">←</span> Turn
+                Left
+              </div>
+              <div>
+                <span className="bg-gray-700 px-2 py-1 rounded">D</span> /{" "}
+                <span className="bg-gray-700 px-2 py-1 rounded">→</span> Turn
+                Right
+              </div>
+              <div>
+                <span className="bg-gray-700 px-2 py-1 rounded">SPACE</span>{" "}
+                Handbrake
+              </div>
+              <div>
+                <span className="bg-gray-700 px-2 py-1 rounded">SHIFT</span>{" "}
+                Boost
+              </div>
             </div>
           </div>
-          
+
           <button
             onClick={startGame}
             className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-bold py-4 px-12 rounded-full text-xl transition-all transform hover:scale-105 shadow-lg"
@@ -84,7 +106,7 @@ export function GameUI() {
       </div>
     );
   }
-  
+
   // Game Over screen
   if (gameOver) {
     return (
@@ -93,18 +115,24 @@ export function GameUI() {
           <h1 className="text-5xl font-bold text-white mb-4 drop-shadow-lg">
             <span className="text-yellow-400">RACE</span> COMPLETE!
           </h1>
-          
+
           <div className="bg-black/30 p-4 rounded-lg mb-6">
             <div className="text-2xl text-white mb-2">
-              Total Time: <span className="text-yellow-400 font-mono">{formatTime(currentLapTime)}</span>
+              Total Time:{" "}
+              <span className="text-yellow-400 font-mono">
+                {formatTime(currentLapTime)}
+              </span>
             </div>
             {bestLapTime && (
               <div className="text-lg text-gray-300">
-                Best Lap: <span className="text-green-400 font-mono">{formatTime(bestLapTime)}</span>
+                Best Lap:{" "}
+                <span className="text-green-400 font-mono">
+                  {formatTime(bestLapTime)}
+                </span>
               </div>
             )}
           </div>
-          
+
           <div className="flex gap-4 justify-center">
             <button
               onClick={resetGame}
@@ -123,7 +151,7 @@ export function GameUI() {
       </div>
     );
   }
-  
+
   // Pause screen
   if (isPaused) {
     return (
@@ -148,7 +176,7 @@ export function GameUI() {
       </div>
     );
   }
-  
+
   // Main HUD
   return (
     <>
@@ -156,31 +184,38 @@ export function GameUI() {
       <div className="absolute top-0 left-0 right-0 p-4 flex justify-between items-start z-40 pointer-events-none">
         {/* Lap Counter */}
         <div className="bg-black/60 backdrop-blur-sm rounded-xl p-3 border-2 border-yellow-400">
-          <div className="text-yellow-400 text-sm font-bold uppercase tracking-wider">Lap</div>
+          <div className="text-yellow-400 text-sm font-bold uppercase tracking-wider">
+            Lap
+          </div>
           <div className="text-white text-3xl font-mono font-bold">
-            {lap}<span className="text-gray-400 text-lg">/{totalLaps}</span>
+            {lap}
+            <span className="text-gray-400 text-lg">/{totalLaps}</span>
           </div>
         </div>
-        
+
         {/* Timer */}
         <div className="bg-black/60 backdrop-blur-sm rounded-xl p-3 border-2 border-blue-400">
-          <div className="text-blue-400 text-sm font-bold uppercase tracking-wider">Time</div>
+          <div className="text-blue-400 text-sm font-bold uppercase tracking-wider">
+            Time
+          </div>
           <div className="text-white text-3xl font-mono font-bold">
             {formatTime(currentLapTime)}
           </div>
         </div>
-        
+
         {/* Best Lap */}
         {bestLapTime && (
           <div className="bg-black/60 backdrop-blur-sm rounded-xl p-3 border-2 border-green-400">
-            <div className="text-green-400 text-sm font-bold uppercase tracking-wider">Best</div>
+            <div className="text-green-400 text-sm font-bold uppercase tracking-wider">
+              Best
+            </div>
             <div className="text-white text-2xl font-mono font-bold">
               {formatTime(bestLapTime)}
             </div>
           </div>
         )}
       </div>
-      
+
       {/* Bottom Bar */}
       <div className="absolute bottom-0 left-0 right-0 p-4 flex justify-between items-end z-40 pointer-events-none">
         {/* Speedometer */}
@@ -193,18 +228,20 @@ export function GameUI() {
           </div>
           {/* Speed bar */}
           <div className="w-32 h-2 bg-gray-700 rounded-full mt-2 overflow-hidden">
-            <div 
+            <div
               className="h-full bg-gradient-to-r from-green-500 via-yellow-500 to-red-500 transition-all duration-100"
               style={{ width: `${(speed / 100) * 100}%` }}
             />
           </div>
         </div>
-        
+
         {/* Boost Meter */}
         <div className="bg-black/60 backdrop-blur-sm rounded-xl p-4 border-2 border-purple-400">
-          <div className="text-purple-400 text-sm font-bold uppercase tracking-wider mb-1">Boost</div>
+          <div className="text-purple-400 text-sm font-bold uppercase tracking-wider mb-1">
+            Boost
+          </div>
           <div className="w-32 h-4 bg-gray-700 rounded-full overflow-hidden">
-            <div 
+            <div
               className="h-full bg-gradient-to-r from-purple-500 to-pink-500 transition-all duration-100"
               style={{ width: `${boostAmount}%` }}
             />
@@ -213,10 +250,12 @@ export function GameUI() {
             Hold <span className="bg-gray-700 px-1 rounded">SHIFT</span> to use
           </div>
         </div>
-        
+
         {/* Item Box */}
         <div className="bg-black/60 backdrop-blur-sm rounded-xl p-4 border-2 border-yellow-400">
-          <div className="text-yellow-400 text-sm font-bold uppercase tracking-wider mb-1">Item</div>
+          <div className="text-yellow-400 text-sm font-bold uppercase tracking-wider mb-1">
+            Item
+          </div>
           {hasItem ? (
             <div className="w-16 h-16 bg-yellow-400 rounded-lg flex items-center justify-center">
               <span className="text-3xl">❓</span>
@@ -228,7 +267,7 @@ export function GameUI() {
           )}
         </div>
       </div>
-      
+
       {/* Controls Hint */}
       {showControls && (
         <div className="absolute bottom-32 left-1/2 transform -translate-x-1/2 bg-black/70 backdrop-blur-sm rounded-xl p-4 text-center z-40 transition-opacity duration-500">
@@ -252,14 +291,25 @@ export function GameUI() {
           </div>
         </div>
       )}
-      
+
       {/* Pause button */}
       <button
         onClick={pauseGame}
         className="absolute top-4 right-4 bg-black/60 hover:bg-black/80 text-white p-3 rounded-full z-50 transition-all"
       >
-        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          className="h-6 w-6"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z"
+          />
         </svg>
       </button>
     </>

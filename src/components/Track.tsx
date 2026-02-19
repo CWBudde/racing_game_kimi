@@ -1,7 +1,7 @@
-import { useRef, useMemo } from 'react';
-import { useFrame } from '@react-three/fiber';
-import { RigidBody, CuboidCollider } from '@react-three/rapier';
-import * as THREE from 'three';
+import { useRef, useMemo } from "react";
+import { useFrame } from "@react-three/fiber";
+import { RigidBody, CuboidCollider } from "@react-three/rapier";
+import * as THREE from "three";
 
 // ── Racing circuit layout via control points ──
 // A proper GP-style circuit with varied corners: fast sweepers, a hairpin,
@@ -41,8 +41,8 @@ const TRACK_SEGMENTS = 200;
 // Smooth closed spline through control points (centripetal avoids cusps)
 const trackCurve = new THREE.CatmullRomCurve3(
   CONTROL_POINTS,
-  true,         // closed
-  'centripetal'
+  true, // closed
+  "centripetal",
 );
 
 const generateTrackPoints = (): THREE.Vector3[] => {
@@ -53,7 +53,7 @@ const generateTrackPoints = (): THREE.Vector3[] => {
 
 const generateTrackWidth = (
   points: THREE.Vector3[],
-  width: number
+  width: number,
 ): { left: THREE.Vector3[]; right: THREE.Vector3[] } => {
   const left: THREE.Vector3[] = [];
   const right: THREE.Vector3[] = [];
@@ -64,8 +64,12 @@ const generateTrackWidth = (
     const tangent = new THREE.Vector3().subVectors(next, prev).normalize();
     const normal = new THREE.Vector3(-tangent.z, 0, tangent.x).normalize();
 
-    left.push(points[i].clone().add(normal.clone().multiplyScalar(width / 2)));
-    right.push(points[i].clone().sub(normal.clone().multiplyScalar(width / 2)));
+    left.push(
+      points[i].clone().add(normal.clone().multiplyScalar(width * 0.5)),
+    );
+    right.push(
+      points[i].clone().sub(normal.clone().multiplyScalar(width * 0.5)),
+    );
   }
 
   return { left, right };
@@ -77,7 +81,10 @@ const TRACK_SIDES = generateTrackWidth(TRACK_POINTS, TRACK_WIDTH);
 export { TRACK_POINTS };
 
 // ── Car spawn helper ──
-export function getTrackStart(): { position: [number, number, number]; yaw: number } {
+export function getTrackStart(): {
+  position: [number, number, number];
+  yaw: number;
+} {
   const p0 = TRACK_POINTS[0];
   const p3 = TRACK_POINTS[3]; // look a few points ahead for a stable heading
   const yaw = Math.atan2(p3.x - p0.x, p3.z - p0.z);
@@ -86,13 +93,13 @@ export function getTrackStart(): { position: [number, number, number]; yaw: numb
 
 // ── Road surface texture with lane markings ──
 const createRoadTexture = (): HTMLCanvasElement => {
-  const canvas = document.createElement('canvas');
+  const canvas = document.createElement("canvas");
   canvas.width = 256;
   canvas.height = 256;
-  const ctx = canvas.getContext('2d')!;
+  const ctx = canvas.getContext("2d")!;
 
   // Asphalt base
-  ctx.fillStyle = '#3a3a3a';
+  ctx.fillStyle = "#3a3a3a";
   ctx.fillRect(0, 0, 256, 256);
 
   // Fine grain noise for realism
@@ -105,12 +112,12 @@ const createRoadTexture = (): HTMLCanvasElement => {
   }
 
   // White edge lines
-  ctx.fillStyle = '#dddddd';
-  ctx.fillRect(0, 0, 8, 256);       // left edge
-  ctx.fillRect(248, 0, 8, 256);     // right edge
+  ctx.fillStyle = "#dddddd";
+  ctx.fillRect(0, 0, 8, 256); // left edge
+  ctx.fillRect(248, 0, 8, 256); // right edge
 
   // Dashed center line
-  ctx.fillStyle = '#cccccc';
+  ctx.fillStyle = "#cccccc";
   for (let y = 0; y < 256; y += 48) {
     ctx.fillRect(124, y, 8, 28);
   }
@@ -160,8 +167,11 @@ export function Track() {
       cumulativeV += segLen;
     }
 
-    geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
-    geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+    geometry.setAttribute(
+      "position",
+      new THREE.Float32BufferAttribute(vertices, 3),
+    );
+    geometry.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
     geometry.setIndex(indices);
     geometry.computeVertexNormals();
 
@@ -184,7 +194,10 @@ export function Track() {
 
   // Checkpoints evenly spaced around the circuit
   const checkpoints = useMemo(() => {
-    const cp: { position: [number, number, number]; rotation: [number, number, number] }[] = [];
+    const cp: {
+      position: [number, number, number];
+      rotation: [number, number, number];
+    }[] = [];
     const numCheckpoints = 8;
 
     for (let i = 0; i < numCheckpoints; i++) {
@@ -243,21 +256,27 @@ export function Track() {
         const ni = (i + 1) % trackPoints.length;
         const angle = Math.atan2(
           trackPoints[ni].x - trackPoints[i].x,
-          trackPoints[ni].z - trackPoints[i].z
+          trackPoints[ni].z - trackPoints[i].z,
         );
         const isRed = Math.floor(i / 5) % 2 === 0;
 
         return (
           <group key={`curb-${i}`}>
             {/* Left kerb */}
-            <mesh position={[left[i].x, 0.08, left[i].z]} rotation={[0, angle, 0]}>
+            <mesh
+              position={[left[i].x, 0.08, left[i].z]}
+              rotation={[0, angle, 0]}
+            >
               <boxGeometry args={[1.5, 0.15, 3]} />
-              <meshStandardMaterial color={isRed ? '#cc2222' : '#ffffff'} />
+              <meshStandardMaterial color={isRed ? "#cc2222" : "#ffffff"} />
             </mesh>
             {/* Right kerb */}
-            <mesh position={[right[i].x, 0.08, right[i].z]} rotation={[0, angle, 0]}>
+            <mesh
+              position={[right[i].x, 0.08, right[i].z]}
+              rotation={[0, angle, 0]}
+            >
               <boxGeometry args={[1.5, 0.15, 3]} />
-              <meshStandardMaterial color={isRed ? '#cc2222' : '#ffffff'} />
+              <meshStandardMaterial color={isRed ? "#cc2222" : "#ffffff"} />
             </mesh>
           </group>
         );
@@ -275,18 +294,30 @@ export function Track() {
         return (
           <group key={`barrier-${i}`}>
             {/* Left barrier */}
-            <RigidBody type="fixed" position={[left[i].x, 0.5, left[i].z]} rotation={[0, angle, 0]}>
+            <RigidBody
+              type="fixed"
+              position={[left[i].x, 0.5, left[i].z]}
+              rotation={[0, angle, 0]}
+            >
               <mesh castShadow>
                 <boxGeometry args={[0.5, 1.0, segLen]} />
-                <meshStandardMaterial color={i % 12 === 0 ? '#cc3333' : '#bbbbbb'} />
+                <meshStandardMaterial
+                  color={i % 12 === 0 ? "#cc3333" : "#bbbbbb"}
+                />
               </mesh>
               <CuboidCollider args={[0.25, 0.5, segLen / 2]} />
             </RigidBody>
             {/* Right barrier */}
-            <RigidBody type="fixed" position={[right[i].x, 0.5, right[i].z]} rotation={[0, angle, 0]}>
+            <RigidBody
+              type="fixed"
+              position={[right[i].x, 0.5, right[i].z]}
+              rotation={[0, angle, 0]}
+            >
               <mesh castShadow>
                 <boxGeometry args={[0.5, 1.0, segLen]} />
-                <meshStandardMaterial color={i % 12 === 0 ? '#cc3333' : '#bbbbbb'} />
+                <meshStandardMaterial
+                  color={i % 12 === 0 ? "#cc3333" : "#bbbbbb"}
+                />
               </mesh>
               <CuboidCollider args={[0.25, 0.5, segLen / 2]} />
             </RigidBody>
@@ -328,13 +359,15 @@ export function Track() {
       </group>
 
       {/* ── Start / Finish Line ── */}
-      <group position={[trackPoints[0].x, trackPoints[0].y + 0.1, trackPoints[0].z]}>
+      <group
+        position={[trackPoints[0].x, trackPoints[0].y + 0.1, trackPoints[0].z]}
+      >
         <mesh
           rotation={[
             -Math.PI / 2,
             Math.atan2(
               trackPoints[1].x - trackPoints[0].x,
-              trackPoints[1].z - trackPoints[0].z
+              trackPoints[1].z - trackPoints[0].z,
             ),
             0,
           ]}
@@ -345,13 +378,13 @@ export function Track() {
             <canvasTexture
               attach="map"
               image={(() => {
-                const canvas = document.createElement('canvas');
+                const canvas = document.createElement("canvas");
                 canvas.width = 256;
                 canvas.height = 64;
-                const ctx = canvas.getContext('2d')!;
+                const ctx = canvas.getContext("2d")!;
                 for (let r = 0; r < 2; r++) {
                   for (let c = 0; c < 8; c++) {
-                    ctx.fillStyle = (r + c) % 2 === 0 ? '#ffffff' : '#000000';
+                    ctx.fillStyle = (r + c) % 2 === 0 ? "#ffffff" : "#000000";
                     ctx.fillRect(c * 32, r * 32, 32, 32);
                   }
                 }

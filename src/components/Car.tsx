@@ -1,8 +1,12 @@
-import { useRef, useEffect, useState } from 'react';
-import { useFrame } from '@react-three/fiber';
-import { RigidBody, CuboidCollider, type RapierRigidBody } from '@react-three/rapier';
-import * as THREE from 'three';
-import { useGameStore } from '../store/gameStore';
+import { useRef, useEffect, useState } from "react";
+import { useFrame } from "@react-three/fiber";
+import {
+  RigidBody,
+  CuboidCollider,
+  type RapierRigidBody,
+} from "@react-three/rapier";
+import * as THREE from "three";
+import { useGameStore } from "../store/gameStore";
 
 interface CarProps {
   position?: [number, number, number];
@@ -15,7 +19,7 @@ export const keys = {
   s: false,
   d: false,
   space: false,
-  shift: false
+  shift: false,
 };
 
 export function Car({ position = [0, 2, 0] }: CarProps) {
@@ -23,7 +27,15 @@ export function Car({ position = [0, 2, 0] }: CarProps) {
   const chassisRef = useRef<THREE.Group>(null);
   const wheelsRef = useRef<THREE.Group>(null);
 
-  const { isPlaying, isPaused, updateSpeed, updateCarPosition, updateCarRotation, boostAmount, updateBoost } = useGameStore();
+  const {
+    isPlaying,
+    isPaused,
+    updateSpeed,
+    updateCarPosition,
+    updateCarRotation,
+    boostAmount,
+    updateBoost,
+  } = useGameStore();
 
   const [localSpeed, setLocalSpeed] = useState(0);
   const steeringRef = useRef(0);
@@ -42,36 +54,44 @@ export function Car({ position = [0, 2, 0] }: CarProps) {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const key = e.key.toLowerCase();
-      if (key === 'w' || key === 'arrowup') keys.w = true;
-      if (key === 'a' || key === 'arrowleft') keys.a = true;
-      if (key === 's' || key === 'arrowdown') keys.s = true;
-      if (key === 'd' || key === 'arrowright') keys.d = true;
-      if (key === ' ') keys.space = true;
-      if (key === 'shift') keys.shift = true;
+      if (key === "w" || key === "arrowup") keys.w = true;
+      if (key === "a" || key === "arrowleft") keys.a = true;
+      if (key === "s" || key === "arrowdown") keys.s = true;
+      if (key === "d" || key === "arrowright") keys.d = true;
+      if (key === " ") keys.space = true;
+      if (key === "shift") keys.shift = true;
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
       const key = e.key.toLowerCase();
-      if (key === 'w' || key === 'arrowup') keys.w = false;
-      if (key === 'a' || key === 'arrowleft') keys.a = false;
-      if (key === 's' || key === 'arrowdown') keys.s = false;
-      if (key === 'd' || key === 'arrowright') keys.d = false;
-      if (key === ' ') keys.space = false;
-      if (key === 'shift') keys.shift = false;
+      if (key === "w" || key === "arrowup") keys.w = false;
+      if (key === "a" || key === "arrowleft") keys.a = false;
+      if (key === "s" || key === "arrowdown") keys.s = false;
+      if (key === "d" || key === "arrowright") keys.d = false;
+      if (key === " ") keys.space = false;
+      if (key === "shift") keys.shift = false;
     };
 
-    window.addEventListener('keydown', handleKeyDown);
-    window.addEventListener('keyup', handleKeyUp);
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("keyup", handleKeyUp);
 
     return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('keyup', handleKeyUp);
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keyup", handleKeyUp);
     };
   }, []);
 
   // Helper to extract Y-axis euler angle from a quaternion
-  const getYawFromQuaternion = (q: { x: number; y: number; z: number; w: number }): number => {
-    return Math.atan2(2 * (q.w * q.y + q.x * q.z), 1 - 2 * (q.y * q.y + q.z * q.z));
+  const getYawFromQuaternion = (q: {
+    x: number;
+    y: number;
+    z: number;
+    w: number;
+  }): number => {
+    return Math.atan2(
+      2 * (q.w * q.y + q.x * q.z),
+      1 - 2 * (q.y * q.y + q.z * q.z),
+    );
   };
 
   // Physics update
@@ -134,17 +154,27 @@ export function Car({ position = [0, 2, 0] }: CarProps) {
     // Apply acceleration as impulse along forward direction
     if (Math.abs(acceleration) > 0.1) {
       const forceMag = acceleration * dt * 500; // mass=500
-      car.applyImpulse({ x: forward.x * forceMag, y: 0, z: forward.z * forceMag }, true);
+      car.applyImpulse(
+        { x: forward.x * forceMag, y: 0, z: forward.z * forceMag },
+        true,
+      );
     }
 
     // --- Steering via angular velocity (lets Rapier handle collision response) ---
-    if (Math.abs(currentSteering) > 0.01 && (Math.abs(speed) > 0.1 || keys.w || keys.s)) {
+    if (
+      Math.abs(currentSteering) > 0.01 &&
+      (Math.abs(speed) > 0.1 || keys.w || keys.s)
+    ) {
       // Invert steering when reversing
       const steerSign = forwardSpeed >= 0 ? 1 : -1;
       // Turn rate scales with speed: ramps up from a minimum, reduces at high speed
       const minTurnRate = 0.15;
-      const speedFactor = Math.max(Math.min(speed / 15, 1) * Math.max(1 - speed / 120, 0.3), minTurnRate);
-      const angularVelY = -currentSteering * STEERING_SPEED * speedFactor * steerSign;
+      const speedFactor = Math.max(
+        Math.min(speed / 15, 1) * Math.max(1 - speed / 120, 0.3),
+        minTurnRate,
+      );
+      const angularVelY =
+        -currentSteering * STEERING_SPEED * speedFactor * steerSign;
       car.setAngvel({ x: 0, y: angularVelY, z: 0 }, true);
     } else {
       // No steering input — stop angular rotation
@@ -157,7 +187,10 @@ export function Car({ position = [0, 2, 0] }: CarProps) {
       const gripStrength = keys.space ? 0.4 : 0.85; // handbrake reduces grip
       // Apply a lateral impulse opposing the slide
       const correctionForce = -lateralSpeed * gripStrength * 500 * dt;
-      car.applyImpulse({ x: right.x * correctionForce, y: 0, z: right.z * correctionForce }, true);
+      car.applyImpulse(
+        { x: right.x * correctionForce, y: 0, z: right.z * correctionForce },
+        true,
+      );
     }
 
     // Handbrake: also slow down overall
@@ -165,7 +198,7 @@ export function Car({ position = [0, 2, 0] }: CarProps) {
       const dampedVel = {
         x: currentVel.x * (1 - 1.5 * dt),
         y: currentVel.y,
-        z: currentVel.z * (1 - 1.5 * dt)
+        z: currentVel.z * (1 - 1.5 * dt),
       };
       car.setLinvel(dampedVel, true);
     }
@@ -173,14 +206,24 @@ export function Car({ position = [0, 2, 0] }: CarProps) {
     // --- Keep car upright (correct any pitch/roll from collisions) ---
     const uprightRot = new THREE.Quaternion().setFromAxisAngle(
       new THREE.Vector3(0, 1, 0),
-      yaw
+      yaw,
     );
     // Slerp toward upright to avoid snapping
-    const currentQuat = new THREE.Quaternion(currentRot.x, currentRot.y, currentRot.z, currentRot.w);
+    const currentQuat = new THREE.Quaternion(
+      currentRot.x,
+      currentRot.y,
+      currentRot.z,
+      currentRot.w,
+    );
     currentQuat.slerp(uprightRot, 0.3);
     car.setRotation(
-      { x: currentQuat.x, y: currentQuat.y, z: currentQuat.z, w: currentQuat.w },
-      true
+      {
+        x: currentQuat.x,
+        y: currentQuat.y,
+        z: currentQuat.z,
+        w: currentQuat.w,
+      },
+      true,
     );
 
     // --- Update game state ---
@@ -210,12 +253,17 @@ export function Car({ position = [0, 2, 0] }: CarProps) {
     // --- Chassis tilt (cosmetic only) ---
     if (chassisRef.current) {
       const tiltX = Math.min(Math.max(-acceleration * 0.003, -0.08), 0.08);
-      const tiltZ = Math.min(Math.max(currentSteering * speed * 0.002, -0.1), 0.1);
-      chassisRef.current.rotation.x += (tiltX - chassisRef.current.rotation.x) * 0.1;
-      chassisRef.current.rotation.z += (tiltZ - chassisRef.current.rotation.z) * 0.1;
+      const tiltZ = Math.min(
+        Math.max(currentSteering * speed * 0.002, -0.1),
+        0.1,
+      );
+      chassisRef.current.rotation.x +=
+        (tiltX - chassisRef.current.rotation.x) * 0.1;
+      chassisRef.current.rotation.z +=
+        (tiltZ - chassisRef.current.rotation.z) * 0.1;
     }
   });
-  
+
   return (
     <RigidBody
       ref={carRef}
@@ -234,35 +282,51 @@ export function Car({ position = [0, 2, 0] }: CarProps) {
           <boxGeometry args={[1.8, 0.6, 3.5]} />
           <meshStandardMaterial color="#e63946" />
         </mesh>
-        
+
         {/* Car body - top */}
         <mesh castShadow position={[0, 1, -0.3]}>
           <boxGeometry args={[1.4, 0.5, 2]} />
           <meshStandardMaterial color="#d62839" />
         </mesh>
-        
+
         {/* Windshield */}
         <mesh position={[0, 1.1, 0.8]} rotation={[-0.3, 0, 0]}>
           <boxGeometry args={[1.2, 0.4, 0.1]} />
-          <meshStandardMaterial color="#1a1a2e" metalness={0.8} roughness={0.2} />
+          <meshStandardMaterial
+            color="#1a1a2e"
+            metalness={0.8}
+            roughness={0.2}
+          />
         </mesh>
-        
+
         {/* Rear window */}
         <mesh position={[0, 1.1, -1.4]} rotation={[0.2, 0, 0]}>
           <boxGeometry args={[1.2, 0.3, 0.1]} />
-          <meshStandardMaterial color="#1a1a2e" metalness={0.8} roughness={0.2} />
+          <meshStandardMaterial
+            color="#1a1a2e"
+            metalness={0.8}
+            roughness={0.2}
+          />
         </mesh>
-        
+
         {/* Side windows */}
         <mesh position={[0.71, 1, -0.3]}>
           <boxGeometry args={[0.05, 0.4, 1.8]} />
-          <meshStandardMaterial color="#1a1a2e" metalness={0.8} roughness={0.2} />
+          <meshStandardMaterial
+            color="#1a1a2e"
+            metalness={0.8}
+            roughness={0.2}
+          />
         </mesh>
         <mesh position={[-0.71, 1, -0.3]}>
           <boxGeometry args={[0.05, 0.4, 1.8]} />
-          <meshStandardMaterial color="#1a1a2e" metalness={0.8} roughness={0.2} />
+          <meshStandardMaterial
+            color="#1a1a2e"
+            metalness={0.8}
+            roughness={0.2}
+          />
         </mesh>
-        
+
         {/* Spoiler */}
         <mesh castShadow position={[0, 1.3, -1.6]}>
           <boxGeometry args={[1.6, 0.1, 0.4]} />
@@ -276,27 +340,43 @@ export function Car({ position = [0, 2, 0] }: CarProps) {
           <boxGeometry args={[0.1, 0.6, 0.2]} />
           <meshStandardMaterial color="#d62839" />
         </mesh>
-        
+
         {/* Headlights */}
         <mesh position={[0.6, 0.5, 1.75]}>
           <boxGeometry args={[0.3, 0.2, 0.1]} />
-          <meshStandardMaterial color="#ffffcc" emissive="#ffffaa" emissiveIntensity={0.5} />
+          <meshStandardMaterial
+            color="#ffffcc"
+            emissive="#ffffaa"
+            emissiveIntensity={0.5}
+          />
         </mesh>
         <mesh position={[-0.6, 0.5, 1.75]}>
           <boxGeometry args={[0.3, 0.2, 0.1]} />
-          <meshStandardMaterial color="#ffffcc" emissive="#ffffaa" emissiveIntensity={0.5} />
+          <meshStandardMaterial
+            color="#ffffcc"
+            emissive="#ffffaa"
+            emissiveIntensity={0.5}
+          />
         </mesh>
-        
+
         {/* Taillights */}
         <mesh position={[0.6, 0.6, -1.75]}>
           <boxGeometry args={[0.3, 0.15, 0.1]} />
-          <meshStandardMaterial color="#ff0000" emissive="#ff0000" emissiveIntensity={0.5} />
+          <meshStandardMaterial
+            color="#ff0000"
+            emissive="#ff0000"
+            emissiveIntensity={0.5}
+          />
         </mesh>
         <mesh position={[-0.6, 0.6, -1.75]}>
           <boxGeometry args={[0.3, 0.15, 0.1]} />
-          <meshStandardMaterial color="#ff0000" emissive="#ff0000" emissiveIntensity={0.5} />
+          <meshStandardMaterial
+            color="#ff0000"
+            emissive="#ff0000"
+            emissiveIntensity={0.5}
+          />
         </mesh>
-        
+
         {/* Number on side */}
         <mesh position={[0.91, 0.6, 0]}>
           <planeGeometry args={[0.4, 0.4]} />
@@ -304,17 +384,17 @@ export function Car({ position = [0, 2, 0] }: CarProps) {
             <canvasTexture
               attach="map"
               image={(() => {
-                const canvas = document.createElement('canvas');
+                const canvas = document.createElement("canvas");
                 canvas.width = 64;
                 canvas.height = 64;
-                const ctx = canvas.getContext('2d')!;
-                ctx.fillStyle = '#ffffff';
+                const ctx = canvas.getContext("2d")!;
+                ctx.fillStyle = "#ffffff";
                 ctx.fillRect(0, 0, 64, 64);
-                ctx.fillStyle = '#000000';
-                ctx.font = 'bold 40px Arial';
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'middle';
-                ctx.fillText('1', 32, 32);
+                ctx.fillStyle = "#000000";
+                ctx.font = "bold 40px Arial";
+                ctx.textAlign = "center";
+                ctx.textBaseline = "middle";
+                ctx.fillText("1", 32, 32);
                 return canvas;
               })()}
             />
@@ -326,51 +406,67 @@ export function Car({ position = [0, 2, 0] }: CarProps) {
             <canvasTexture
               attach="map"
               image={(() => {
-                const canvas = document.createElement('canvas');
+                const canvas = document.createElement("canvas");
                 canvas.width = 64;
                 canvas.height = 64;
-                const ctx = canvas.getContext('2d')!;
-                ctx.fillStyle = '#ffffff';
+                const ctx = canvas.getContext("2d")!;
+                ctx.fillStyle = "#ffffff";
                 ctx.fillRect(0, 0, 64, 64);
-                ctx.fillStyle = '#000000';
-                ctx.font = 'bold 40px Arial';
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'middle';
-                ctx.fillText('1', 32, 32);
+                ctx.fillStyle = "#000000";
+                ctx.font = "bold 40px Arial";
+                ctx.textAlign = "center";
+                ctx.textBaseline = "middle";
+                ctx.fillText("1", 32, 32);
                 return canvas;
               })()}
             />
           </meshBasicMaterial>
         </mesh>
       </group>
-      
+
       {/* Wheels */}
       <group ref={wheelsRef}>
         {/* Front Left */}
-        <mesh castShadow position={[0.9, 0.3, 1.2]} rotation={[0, 0, Math.PI / 2]}>
+        <mesh
+          castShadow
+          position={[0.9, 0.3, 1.2]}
+          rotation={[0, 0, Math.PI / 2]}
+        >
           <cylinderGeometry args={[0.35, 0.35, 0.25, 16]} />
           <meshStandardMaterial color="#1a1a1a" />
         </mesh>
         {/* Front Right */}
-        <mesh castShadow position={[-0.9, 0.3, 1.2]} rotation={[0, 0, Math.PI / 2]}>
+        <mesh
+          castShadow
+          position={[-0.9, 0.3, 1.2]}
+          rotation={[0, 0, Math.PI / 2]}
+        >
           <cylinderGeometry args={[0.35, 0.35, 0.25, 16]} />
           <meshStandardMaterial color="#1a1a1a" />
         </mesh>
         {/* Rear Left */}
-        <mesh castShadow position={[0.9, 0.35, -1.2]} rotation={[0, 0, Math.PI / 2]}>
+        <mesh
+          castShadow
+          position={[0.9, 0.35, -1.2]}
+          rotation={[0, 0, Math.PI / 2]}
+        >
           <cylinderGeometry args={[0.4, 0.4, 0.3, 16]} />
           <meshStandardMaterial color="#1a1a1a" />
         </mesh>
         {/* Rear Right */}
-        <mesh castShadow position={[-0.9, 0.35, -1.2]} rotation={[0, 0, Math.PI / 2]}>
+        <mesh
+          castShadow
+          position={[-0.9, 0.35, -1.2]}
+          rotation={[0, 0, Math.PI / 2]}
+        >
           <cylinderGeometry args={[0.4, 0.4, 0.3, 16]} />
           <meshStandardMaterial color="#1a1a1a" />
         </mesh>
       </group>
-      
+
       {/* Car collider */}
       <CuboidCollider args={[0.9, 0.5, 1.75]} position={[0, 0.6, 0]} />
-      
+
       {/* Exhaust particles */}
       {localSpeed > 5 && (
         <>
