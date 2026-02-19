@@ -29,13 +29,13 @@ export function Car({ position = [0, 2, 0] }: CarProps) {
   const steeringRef = useRef(0);
 
   // Car physics constants
-  const MAX_SPEED = 60;
-  const MAX_REVERSE_SPEED = 20;
-  const ACCELERATION = 30;
-  const DECELERATION = 15;
-  const BRAKE_FORCE = 50;
-  const STEERING_SPEED = 4.0;
-  const MAX_STEERING_ANGLE = 0.5;
+  const MAX_SPEED = 45;
+  const MAX_REVERSE_SPEED = 15;
+  const ACCELERATION = 18;
+  const DECELERATION = 12;
+  const BRAKE_FORCE = 35;
+  const STEERING_SPEED = 2.5;
+  const MAX_STEERING_ANGLE = 0.35;
   const BOOST_MULTIPLIER = 1.5;
 
   // Setup keyboard listeners
@@ -138,11 +138,12 @@ export function Car({ position = [0, 2, 0] }: CarProps) {
     }
 
     // --- Steering via angular velocity (lets Rapier handle collision response) ---
-    if (Math.abs(speed) > 0.5 && Math.abs(currentSteering) > 0.01) {
+    if (Math.abs(currentSteering) > 0.01 && (Math.abs(speed) > 0.1 || keys.w || keys.s)) {
       // Invert steering when reversing
       const steerSign = forwardSpeed >= 0 ? 1 : -1;
-      // Turn rate scales with speed: ramps up from 0, reduces at high speed
-      const speedFactor = Math.min(speed / 10, 1) * Math.max(1 - speed / 150, 0.25);
+      // Turn rate scales with speed: ramps up from a minimum, reduces at high speed
+      const minTurnRate = 0.15;
+      const speedFactor = Math.max(Math.min(speed / 15, 1) * Math.max(1 - speed / 120, 0.3), minTurnRate);
       const angularVelY = -currentSteering * STEERING_SPEED * speedFactor * steerSign;
       car.setAngvel({ x: 0, y: angularVelY, z: 0 }, true);
     } else {
@@ -201,7 +202,7 @@ export function Car({ position = [0, 2, 0] }: CarProps) {
       wheelsRef.current.children.forEach((wheel, i) => {
         wheel.rotation.x += forwardSpeed * dt * 0.5;
         if (i < 2) {
-          wheel.rotation.y = currentSteering;
+          wheel.rotation.y = -currentSteering;
         }
       });
     }
@@ -224,8 +225,8 @@ export function Car({ position = [0, 2, 0] }: CarProps) {
       linearDamping={0.3}
       angularDamping={0.8}
       enabledRotations={[false, true, false]}
-      restitution={0.1}
-      friction={0.8}
+      restitution={0.3}
+      friction={0.7}
     >
       <group ref={chassisRef}>
         {/* Main chassis */}
