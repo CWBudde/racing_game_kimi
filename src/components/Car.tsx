@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState } from "react";
+import { useRef, useState } from "react";
 import { useFrame } from "@react-three/fiber";
 import {
   RigidBody,
@@ -7,20 +7,23 @@ import {
 } from "@react-three/rapier";
 import * as THREE from "three";
 import { useGameStore } from "../store/gameStore";
+import {
+  keys,
+  useKeyboardInput,
+  MAX_SPEED,
+  MAX_REVERSE_SPEED,
+  ACCELERATION,
+  DECELERATION,
+  BRAKE_FORCE,
+  STEERING_SPEED,
+  MAX_STEERING_ANGLE,
+  BOOST_MULTIPLIER,
+  getYawFromQuaternion,
+} from "./carPhysics";
 
 interface CarProps {
   position?: [number, number, number];
 }
-
-// Input state (exported so mobile controller can drive it)
-export const keys = {
-  w: false,
-  a: false,
-  s: false,
-  d: false,
-  space: false,
-  shift: false,
-};
 
 export function Car({ position = [0, 2, 0] }: CarProps) {
   const carRef = useRef<RapierRigidBody>(null);
@@ -40,59 +43,7 @@ export function Car({ position = [0, 2, 0] }: CarProps) {
   const [localSpeed, setLocalSpeed] = useState(0);
   const steeringRef = useRef(0);
 
-  // Car physics constants
-  const MAX_SPEED = 45;
-  const MAX_REVERSE_SPEED = 15;
-  const ACCELERATION = 18;
-  const DECELERATION = 12;
-  const BRAKE_FORCE = 35;
-  const STEERING_SPEED = 2.5;
-  const MAX_STEERING_ANGLE = 0.35;
-  const BOOST_MULTIPLIER = 1.5;
-
-  // Setup keyboard listeners
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      const key = e.key.toLowerCase();
-      if (key === "w" || key === "arrowup") keys.w = true;
-      if (key === "a" || key === "arrowleft") keys.a = true;
-      if (key === "s" || key === "arrowdown") keys.s = true;
-      if (key === "d" || key === "arrowright") keys.d = true;
-      if (key === " ") keys.space = true;
-      if (key === "shift") keys.shift = true;
-    };
-
-    const handleKeyUp = (e: KeyboardEvent) => {
-      const key = e.key.toLowerCase();
-      if (key === "w" || key === "arrowup") keys.w = false;
-      if (key === "a" || key === "arrowleft") keys.a = false;
-      if (key === "s" || key === "arrowdown") keys.s = false;
-      if (key === "d" || key === "arrowright") keys.d = false;
-      if (key === " ") keys.space = false;
-      if (key === "shift") keys.shift = false;
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    window.addEventListener("keyup", handleKeyUp);
-
-    return () => {
-      window.removeEventListener("keydown", handleKeyDown);
-      window.removeEventListener("keyup", handleKeyUp);
-    };
-  }, []);
-
-  // Helper to extract Y-axis euler angle from a quaternion
-  const getYawFromQuaternion = (q: {
-    x: number;
-    y: number;
-    z: number;
-    w: number;
-  }): number => {
-    return Math.atan2(
-      2 * (q.w * q.y + q.x * q.z),
-      1 - 2 * (q.y * q.y + q.z * q.z),
-    );
-  };
+  useKeyboardInput();
 
   // Physics update
   useFrame((_, delta) => {
