@@ -1,5 +1,5 @@
 import { RigidBody, CuboidCollider } from "@react-three/rapier";
-import { useCarPhysics } from "./carPhysics";
+import { useCarPhysics, CAR_MASS } from "./carPhysics";
 
 interface CarProps {
   position?: [number, number, number];
@@ -12,7 +12,7 @@ export function Car({ position = [0, 2, 0] }: CarProps) {
     <RigidBody
       ref={carRef}
       position={position}
-      mass={500}
+      mass={CAR_MASS}
       colliders={false}
       linearDamping={0.3}
       angularDamping={0.8}

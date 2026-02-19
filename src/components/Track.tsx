@@ -2,7 +2,7 @@ import { useRef, useMemo } from "react";
 import { useFrame } from "@react-three/fiber";
 import { RigidBody, CuboidCollider } from "@react-three/rapier";
 import * as THREE from "three";
-import { TRACK_POINTS, TRACK_SIDES, createRoadTexture } from "./trackData";
+import { TRACK_POINTS, TRACK_SIDES, generateBarrierSegments, createRoadTexture } from "./trackData";
 
 // ── Track component ──
 export function Track() {
@@ -161,48 +161,35 @@ export function Track() {
         );
       })}
 
-      {/* ── Barrier Walls — collision boundaries every 6th point ── */}
-      {trackPoints.map((_, i) => {
-        if (i % 6 !== 0) return null;
-        const ni = (i + 1) % trackPoints.length;
-        const curr = trackPoints[i];
-        const next = trackPoints[ni];
-        const angle = Math.atan2(next.x - curr.x, next.z - curr.z);
-        const segLen = curr.distanceTo(next) * 6;
-
-        return (
-          <group key={`barrier-${i}`}>
-            {/* Left barrier */}
-            <RigidBody
-              type="fixed"
-              position={[left[i].x, 0.5, left[i].z]}
-              rotation={[0, angle, 0]}
-            >
-              <mesh castShadow>
-                <boxGeometry args={[0.5, 1.0, segLen]} />
-                <meshStandardMaterial
-                  color={i % 12 === 0 ? "#cc3333" : "#bbbbbb"}
-                />
-              </mesh>
-              <CuboidCollider args={[0.25, 0.5, segLen / 2]} />
-            </RigidBody>
-            {/* Right barrier */}
-            <RigidBody
-              type="fixed"
-              position={[right[i].x, 0.5, right[i].z]}
-              rotation={[0, angle, 0]}
-            >
-              <mesh castShadow>
-                <boxGeometry args={[0.5, 1.0, segLen]} />
-                <meshStandardMaterial
-                  color={i % 12 === 0 ? "#cc3333" : "#bbbbbb"}
-                />
-              </mesh>
-              <CuboidCollider args={[0.25, 0.5, segLen / 2]} />
-            </RigidBody>
-          </group>
-        );
-      })}
+      {/* ── Barrier Walls — arc-length sampled independently per side ── */}
+      {useMemo(() => generateBarrierSegments(left, 8), [left]).map((seg, i) => (
+        <RigidBody
+          key={`barrier-left-${i}`}
+          type="fixed"
+          position={[seg.position.x, 0.5, seg.position.z]}
+          rotation={[0, seg.angle, 0]}
+        >
+          <mesh castShadow>
+            <boxGeometry args={[0.5, 1.0, seg.length]} />
+            <meshStandardMaterial color={i % 2 === 0 ? "#cc3333" : "#bbbbbb"} />
+          </mesh>
+          <CuboidCollider args={[0.25, 0.5, seg.length / 2]} />
+        </RigidBody>
+      ))}
+      {useMemo(() => generateBarrierSegments(right, 8), [right]).map((seg, i) => (
+        <RigidBody
+          key={`barrier-right-${i}`}
+          type="fixed"
+          position={[seg.position.x, 0.5, seg.position.z]}
+          rotation={[0, seg.angle, 0]}
+        >
+          <mesh castShadow>
+            <boxGeometry args={[0.5, 1.0, seg.length]} />
+            <meshStandardMaterial color={i % 2 === 0 ? "#cc3333" : "#bbbbbb"} />
+          </mesh>
+          <CuboidCollider args={[0.25, 0.5, seg.length / 2]} />
+        </RigidBody>
+      ))}
 
       {/* ── Checkpoints ── */}
       <group ref={checkpointsRef}>

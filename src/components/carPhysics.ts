@@ -50,12 +50,13 @@ function useKeyboardInput() {
 // Car physics constants
 const MAX_SPEED = 45;
 const MAX_REVERSE_SPEED = 15;
-const ACCELERATION = 18;
-const DECELERATION = 12;
+const ACCELERATION = 8;
+const DECELERATION = 4;
 const BRAKE_FORCE = 35;
-const STEERING_SPEED = 2.5;
-const MAX_STEERING_ANGLE = 0.35;
+const STEERING_SPEED = 5.0;
+const MAX_STEERING_ANGLE = 0.8;
 const BOOST_MULTIPLIER = 1.5;
+export const CAR_MASS = 80;
 
 // Helper to extract Y-axis euler angle from a quaternion
 const getYawFromQuaternion = (q: {
@@ -124,6 +125,13 @@ export function useCarPhysics() {
     steeringRef.current += (targetSteering - steeringRef.current) * steerLerp;
     const currentSteering = steeringRef.current;
 
+    // --- DEBUG: log velocity when coasting ---
+    if (!keys.w && !keys.s && Math.abs(forwardSpeed) > 0.05) {
+      console.log(
+        `coast: fwdSpeed=${forwardSpeed.toFixed(3)} speed=${speed.toFixed(3)} vel=(${currentVel.x.toFixed(2)}, ${currentVel.z.toFixed(2)}) yaw=${yaw.toFixed(3)}`,
+      );
+    }
+
     // --- Acceleration / braking ---
     let acceleration = 0;
 
@@ -142,23 +150,22 @@ export function useCarPhysics() {
         acceleration = -ACCELERATION * 0.5;
       }
     } else {
-      // Natural deceleration (drag)
-      if (Math.abs(forwardSpeed) > 0.1) {
-        acceleration = -Math.sign(forwardSpeed) * DECELERATION;
-      }
+      // Coasting — no keys pressed
+      // Directly damp velocity (stable, can never overshoot zero)
+      const dampFactor = Math.exp(-DECELERATION * 0.15 * dt);
+      car.setLinvel(
+        {
+          x: currentVel.x * dampFactor,
+          y: currentVel.y,
+          z: currentVel.z * dampFactor,
+        },
+        true,
+      );
     }
 
     // Apply acceleration as impulse along forward direction
     if (Math.abs(acceleration) > 0.1) {
-      let forceMag = acceleration * dt * 500; // mass=500
-
-      // Clamp drag so it never reverses the velocity (prevents oscillation)
-      if (!keys.w && !keys.s) {
-        const maxDragImpulse = Math.abs(forwardSpeed) * 500;
-        forceMag = Math.max(forceMag, -maxDragImpulse);
-        forceMag = Math.min(forceMag, maxDragImpulse);
-      }
-
+      const forceMag = acceleration * dt * CAR_MASS;
       car.applyImpulse(
         { x: forward.x * forceMag, y: 0, z: forward.z * forceMag },
         true,
@@ -191,7 +198,7 @@ export function useCarPhysics() {
     if (Math.abs(lateralSpeed) > 0.2) {
       const gripStrength = keys.space ? 0.4 : 0.85; // handbrake reduces grip
       // Apply a lateral impulse opposing the slide
-      const correctionForce = -lateralSpeed * gripStrength * 500 * dt;
+      const correctionForce = -lateralSpeed * gripStrength * CAR_MASS * dt;
       car.applyImpulse(
         { x: right.x * correctionForce, y: 0, z: right.z * correctionForce },
         true,

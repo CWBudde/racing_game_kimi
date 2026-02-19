@@ -76,6 +76,63 @@ const generateTrackWidth = (
 export const TRACK_POINTS = generateTrackPoints();
 export const TRACK_SIDES = generateTrackWidth(TRACK_POINTS, TRACK_WIDTH);
 
+// ── Barrier segment generation along a polyline at fixed arc-length intervals ──
+// Samples a closed polyline at every `spacing` world units and returns
+// {position, angle, length} for each barrier panel — independently for each side.
+export interface BarrierSegment {
+  position: THREE.Vector3;
+  angle: number;
+  length: number;
+}
+
+export function generateBarrierSegments(
+  polyline: THREE.Vector3[],
+  spacing: number,
+): BarrierSegment[] {
+  const segments: BarrierSegment[] = [];
+  const n = polyline.length;
+
+  // Build cumulative arc-length table
+  const arcLen: number[] = [0];
+  for (let i = 0; i < n; i++) {
+    const ni = (i + 1) % n;
+    arcLen.push(arcLen[i] + polyline[i].distanceTo(polyline[ni]));
+  }
+  const totalLen = arcLen[n]; // arc-length of full closed loop
+
+  // Sample at fixed intervals
+  let sampleDist = 0;
+  let segIdx = 0;
+
+  while (sampleDist < totalLen) {
+    const nextDist = Math.min(sampleDist + spacing, totalLen);
+
+    // Find polyline point at sampleDist
+    while (segIdx < n - 1 && arcLen[segIdx + 1] < sampleDist) segIdx++;
+    const t0 = (sampleDist - arcLen[segIdx]) / (arcLen[segIdx + 1] - arcLen[segIdx]);
+    const p0 = new THREE.Vector3().lerpVectors(polyline[segIdx], polyline[(segIdx + 1) % n], t0);
+
+    // Find polyline point at nextDist
+    let endIdx = segIdx;
+    while (endIdx < n - 1 && arcLen[endIdx + 1] < nextDist) endIdx++;
+    const t1 = (nextDist - arcLen[endIdx]) / (arcLen[endIdx + 1] - arcLen[endIdx]);
+    const p1 = new THREE.Vector3().lerpVectors(polyline[endIdx], polyline[(endIdx + 1) % n], t1);
+
+    const len = p0.distanceTo(p1);
+    if (len > 0.01) {
+      segments.push({
+        position: new THREE.Vector3().addVectors(p0, p1).multiplyScalar(0.5),
+        angle: Math.atan2(p1.x - p0.x, p1.z - p0.z),
+        length: len,
+      });
+    }
+
+    sampleDist = nextDist;
+  }
+
+  return segments;
+}
+
 // ── Car spawn helper ──
 export function getTrackStart(): {
   position: [number, number, number];
