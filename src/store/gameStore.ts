@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
-import { getTrackStart } from '../components/Track';
+import { getTrackStart } from '../components/trackData';
 
 const trackStart = getTrackStart();
 

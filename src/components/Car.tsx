@@ -245,7 +245,8 @@ export function Car({ position = [0, 2, 0] }: CarProps) {
       wheelsRef.current.children.forEach((wheel, i) => {
         wheel.rotation.x += forwardSpeed * dt * 0.5;
         if (i < 2) {
-          wheel.rotation.y = -currentSteering;
+          const steerSign = forwardSpeed >= 0 ? 1 : -1;
+          wheel.rotation.y = -currentSteering * steerSign;
         }
       });
     }

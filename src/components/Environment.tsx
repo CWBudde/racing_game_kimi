@@ -2,7 +2,7 @@ import { useRef, useMemo } from "react";
 import { useFrame } from "@react-three/fiber";
 import { RigidBody, CuboidCollider } from "@react-three/rapier";
 import * as THREE from "three";
-import { TRACK_POINTS } from "./Track";
+import { TRACK_POINTS } from "./trackData";
 
 // Tree component
 function Tree({
