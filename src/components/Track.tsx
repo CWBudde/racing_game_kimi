@@ -227,16 +227,17 @@ export function Track() {
       {/* ── Start / Finish Line ── */}
       <group
         position={[trackPoints[0].x, trackPoints[0].y + 0.1, trackPoints[0].z]}
+        rotation={[
+          0,
+          Math.atan2(
+            trackPoints[1].x - trackPoints[0].x,
+            trackPoints[1].z - trackPoints[0].z,
+          ),
+          0,
+        ]}
       >
         <mesh
-          rotation={[
-            -Math.PI / 2,
-            Math.atan2(
-              trackPoints[1].x - trackPoints[0].x,
-              trackPoints[1].z - trackPoints[0].z,
-            ),
-            0,
-          ]}
+          rotation={[-Math.PI / 2, 0, 0]}
           receiveShadow
         >
           <planeGeometry args={[20, 6]} />
