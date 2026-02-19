@@ -1,4 +1,4 @@
-# racing_game_kimi
+# Racing Game Prototype with KIMI K2.5
 
 This started as a **one-shot experiment with KIMI K2.5** (Feb 2026): a small **3D kart racing prototype** built with React, Vite, and a Three.js + Rapier physics stack. The first prototype (see history) was built very quickly, but the physics were kind of broken. It took a few claude sessions and some manual adjustment to get it actually working to some extent. There is still plenty of room for improvement, but it was a fun experiment to see, where we currently are with KIMI for this kind of project.
 
