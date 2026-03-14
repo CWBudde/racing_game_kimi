@@ -2,7 +2,7 @@ import { useRef, useMemo } from "react";
 import { useFrame } from "@react-three/fiber";
 import { RigidBody, CuboidCollider } from "@react-three/rapier";
 import * as THREE from "three";
-import { getTrackLayout } from "./trackData";
+import { getTrackLayout, TRACK_WIDTH } from "./trackData";
 import { useGameStore } from "../store/gameStore";
 
 // Tree component
@@ -154,7 +154,7 @@ function ItemBox({ position }: { position: [number, number, number] }) {
 }
 
 // Minimum distance from track centerline before placing objects
-const TRACK_CLEARANCE = 18;
+const TRACK_CLEARANCE = TRACK_WIDTH * 0.5 + 16;
 
 function tooCloseToTrack(trackPoints: THREE.Vector3[], x: number, z: number): boolean {
   const c2 = TRACK_CLEARANCE * TRACK_CLEARANCE;
@@ -173,57 +173,61 @@ export function Environment() {
     () => getTrackLayout(selectedCourseId).points,
     [selectedCourseId],
   );
+  const isDesertTrack = selectedCourseId === "desert-run";
 
   // Generate tree positions — two rings: near-track and far-field
   const trees = useMemo(() => {
     const positions: { position: [number, number, number]; scale: number }[] =
       [];
 
-    // Near-track trees (just outside the barriers)
-    for (let i = 0; i < 60; i++) {
-      const angle = (i / 60) * Math.PI * 2 + Math.random() * 0.4;
-      const radius = 80 + Math.random() * 60;
-      const x = Math.cos(angle) * radius;
-      const z = Math.sin(angle) * radius;
-      if (tooCloseToTrack(trackPoints, x, z)) continue;
-      positions.push({
-        position: [x, 0, z],
-        scale: 0.8 + Math.random() * 0.6,
-      });
-    }
+    if (!isDesertTrack) {
+      for (let i = 0; i < 60; i++) {
+        const angle = (i / 60) * Math.PI * 2 + Math.random() * 0.4;
+        const radius = 80 + Math.random() * 60;
+        const x = Math.cos(angle) * radius;
+        const z = Math.sin(angle) * radius;
+        if (tooCloseToTrack(trackPoints, x, z)) continue;
+        positions.push({
+          position: [x, 0, z],
+          scale: 0.8 + Math.random() * 0.6,
+        });
+      }
 
-    // Far-field trees filling the larger world
-    for (let i = 0; i < 40; i++) {
-      const angle = (i / 40) * Math.PI * 2 + Math.random() * 0.6;
-      const radius = 160 + Math.random() * 200;
-      const x = Math.cos(angle) * radius;
-      const z = Math.sin(angle) * radius;
-      positions.push({
-        position: [x, 0, z],
-        scale: 1 + Math.random() * 1.0,
-      });
+      for (let i = 0; i < 40; i++) {
+        const angle = (i / 40) * Math.PI * 2 + Math.random() * 0.6;
+        const radius = 160 + Math.random() * 200;
+        const x = Math.cos(angle) * radius;
+        const z = Math.sin(angle) * radius;
+        positions.push({
+          position: [x, 0, z],
+          scale: 1 + Math.random() * 1.0,
+        });
+      }
     }
 
     return positions;
-  }, []);
+  }, [isDesertTrack, trackPoints]);
 
   // Generate rock positions — scattered around the landscape
   const rocks = useMemo(() => {
     const positions: { position: [number, number, number]; scale: number }[] =
       [];
-    for (let i = 0; i < 50; i++) {
-      const angle = (i / 50) * Math.PI * 2 + Math.random() * 0.8;
-      const radius = 70 + Math.random() * 180;
+    const rockCount = isDesertTrack ? 90 : 50;
+    for (let i = 0; i < rockCount; i++) {
+      const angle = (i / rockCount) * Math.PI * 2 + Math.random() * 0.8;
+      const radius = isDesertTrack
+        ? 90 + Math.random() * 260
+        : 70 + Math.random() * 180;
       const x = Math.cos(angle) * radius;
       const z = Math.sin(angle) * radius;
       if (tooCloseToTrack(trackPoints, x, z)) continue;
       positions.push({
         position: [x, 0.5, z],
-        scale: 0.5 + Math.random() * 1.2,
+        scale: isDesertTrack ? 0.7 + Math.random() * 1.8 : 0.5 + Math.random() * 1.2,
       });
     }
     return positions;
-  }, [trackPoints]);
+  }, [isDesertTrack, trackPoints]);
 
   // Generate cloud positions — spread across the wider sky
   const clouds = useMemo(() => {
@@ -296,7 +300,7 @@ export function Environment() {
               rotation={[0, -angle, 0]}
             >
               <coneGeometry args={[50, 100, 4]} />
-              <meshStandardMaterial color="#5a6b7c" />
+              <meshStandardMaterial color={isDesertTrack ? "#8a6949" : "#5a6b7c"} />
             </mesh>
           );
         })}
@@ -305,7 +309,7 @@ export function Environment() {
       {/* Sun */}
       <mesh position={[200, 120, -200]}>
         <sphereGeometry args={[20, 32, 32]} />
-        <meshBasicMaterial color="#ffdd44" />
+        <meshBasicMaterial color={isDesertTrack ? "#ffd27a" : "#ffdd44"} />
       </mesh>
 
       {/* Directional light from sun */}

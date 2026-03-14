@@ -15,6 +15,7 @@ export function Track() {
   const checkpointsRef = useRef<THREE.Group>(null);
   const selectedCourseId = useGameStore((state) => state.selectedCourseId);
   const layout = useMemo(() => getTrackLayout(selectedCourseId), [selectedCourseId]);
+  const isDesertTrack = selectedCourseId === "desert-run";
 
   const trackPoints = layout.points;
   const { left, right } = layout.sides;
@@ -112,7 +113,7 @@ export function Track() {
 
   return (
     <group ref={trackRef}>
-      {/* ── Ground / Grass ── */}
+      {/* ── Ground / Surroundings ── */}
       <RigidBody type="fixed" colliders={false}>
         <mesh
           geometry={groundGeometry}
@@ -120,7 +121,10 @@ export function Track() {
           position={[0, -0.1, 0]}
           receiveShadow
         >
-          <meshStandardMaterial color="#4a7c59" roughness={0.9} />
+          <meshStandardMaterial
+            color={isDesertTrack ? "#8f6a3a" : "#4a7c59"}
+            roughness={0.95}
+          />
         </mesh>
         <CuboidCollider args={[600, 0.5, 600]} position={[0, -0.6, 0]} />
       </RigidBody>

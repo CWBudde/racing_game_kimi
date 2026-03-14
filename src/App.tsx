@@ -10,6 +10,7 @@ import { Environment } from "./components/Environment";
 import { AIOpponent } from "./components/AIOpponent";
 import { GameUI } from "./components/GameUI";
 import { MobileController } from "./components/MobileController";
+import { CourseMusic } from "./components/CourseMusic";
 import { useGameStore } from "./store/gameStore";
 import "./App.css";
 
@@ -103,6 +104,8 @@ function App() {
 
   return (
     <div className="relative w-full h-screen overflow-hidden bg-black">
+      <CourseMusic />
+
       {/* 3D Canvas */}
       <Canvas
         shadows
