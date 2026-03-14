@@ -170,6 +170,10 @@ export function GameUI() {
                 Boost
               </div>
             </div>
+            <div className="mt-3 text-sm text-gray-200">
+              Xbox controller: left stick or D-pad steer, RT accelerate, LT
+              brake/reverse, A handbrake, RB boost
+            </div>
           </div>
 
           <button

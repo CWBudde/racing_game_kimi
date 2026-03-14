@@ -15,6 +15,62 @@ export const keys = {
   shift: false,
 };
 
+type ControlState = {
+  throttle: number;
+  brake: number;
+  steer: number;
+  handbrake: boolean;
+  boost: boolean;
+};
+
+const GAMEPAD_DEADZONE = 0.18;
+
+const clamp = (value: number, min: number, max: number) =>
+  Math.min(Math.max(value, min), max);
+
+const applyDeadzone = (value: number, deadzone = GAMEPAD_DEADZONE) => {
+  if (Math.abs(value) < deadzone) return 0;
+  const normalized = (Math.abs(value) - deadzone) / (1 - deadzone);
+  return Math.sign(value) * normalized;
+};
+
+const readGamepadInput = (): ControlState => {
+  if (typeof navigator === "undefined" || !navigator.getGamepads) {
+    return {
+      throttle: 0,
+      brake: 0,
+      steer: 0,
+      handbrake: false,
+      boost: false,
+    };
+  }
+
+  for (const pad of navigator.getGamepads()) {
+    if (!pad?.connected) continue;
+
+    const stickSteer = applyDeadzone(pad.axes[0] ?? 0);
+    const dpadLeft = pad.buttons[14]?.pressed ? -1 : 0;
+    const dpadRight = pad.buttons[15]?.pressed ? 1 : 0;
+    const steer = dpadLeft + dpadRight || stickSteer;
+
+    return {
+      throttle: clamp(pad.buttons[7]?.value ?? 0, 0, 1),
+      brake: clamp(pad.buttons[6]?.value ?? 0, 0, 1),
+      steer: clamp(steer, -1, 1),
+      handbrake: !!pad.buttons[0]?.pressed,
+      boost: !!pad.buttons[5]?.pressed,
+    };
+  }
+
+  return {
+    throttle: 0,
+    brake: 0,
+    steer: 0,
+    handbrake: false,
+    boost: false,
+  };
+};
+
 // Setup keyboard listeners
 function useKeyboardInput() {
   useEffect(() => {
@@ -120,11 +176,16 @@ export function useCarPhysics() {
     const forwardSpeed = currentVel.x * forward.x + currentVel.z * forward.z;
     const lateralSpeed = currentVel.x * right.x + currentVel.z * right.z;
     const speed = Math.sqrt(currentVel.x ** 2 + currentVel.z ** 2);
+    const gamepadInput = readGamepadInput();
+    const steeringInput =
+      gamepadInput.steer || (keys.a ? -1 : 0) + (keys.d ? 1 : 0);
+    const throttleInput = Math.max(keys.w ? 1 : 0, gamepadInput.throttle);
+    const brakeInput = Math.max(keys.s ? 1 : 0, gamepadInput.brake);
+    const handbrakeActive = keys.space || gamepadInput.handbrake;
+    const boostActive = keys.shift || gamepadInput.boost;
 
     // --- Steering input (smooth, frame-rate independent) ---
-    let targetSteering = 0;
-    if (keys.a) targetSteering = -MAX_STEERING_ANGLE;
-    if (keys.d) targetSteering = MAX_STEERING_ANGLE;
+    const targetSteering = steeringInput * MAX_STEERING_ANGLE;
 
     // Smooth steering with exponential interpolation
     const steerLerp = 1 - Math.pow(0.001, dt);
@@ -134,19 +195,19 @@ export function useCarPhysics() {
     // --- Acceleration / braking ---
     let acceleration = 0;
 
-    if (keys.w) {
-      const boost = keys.shift && boostAmount > 0 ? BOOST_MULTIPLIER : 1;
-      if (keys.shift && boostAmount > 0) {
-        updateBoost(boostAmount - dt * 20);
+    if (throttleInput > 0) {
+      const boost = boostActive && boostAmount > 0 ? BOOST_MULTIPLIER : 1;
+      if (boostActive && boostAmount > 0) {
+        updateBoost(Math.max(boostAmount - dt * 20, 0));
       }
       if (forwardSpeed < MAX_SPEED * boost) {
-        acceleration = ACCELERATION * boost;
+        acceleration = ACCELERATION * boost * throttleInput;
       }
-    } else if (keys.s) {
+    } else if (brakeInput > 0) {
       if (forwardSpeed > 0.5) {
-        acceleration = -BRAKE_FORCE;
+        acceleration = -BRAKE_FORCE * brakeInput;
       } else if (forwardSpeed > -MAX_REVERSE_SPEED) {
-        acceleration = -ACCELERATION * 0.5;
+        acceleration = -ACCELERATION * 0.5 * brakeInput;
       }
     } else {
       // Coasting — no keys pressed
@@ -174,7 +235,7 @@ export function useCarPhysics() {
     // --- Steering via angular velocity (lets Rapier handle collision response) ---
     if (
       Math.abs(currentSteering) > 0.01 &&
-      (Math.abs(speed) > 0.1 || keys.w || keys.s)
+      (Math.abs(speed) > 0.1 || throttleInput > 0 || brakeInput > 0)
     ) {
       // Invert steering when reversing
       const steerSign = forwardSpeed >= 0 ? 1 : -1;
@@ -195,7 +256,7 @@ export function useCarPhysics() {
     // --- Lateral grip: gently redirect velocity toward forward direction ---
     // Instead of hard-setting linvel, apply a corrective impulse
     if (Math.abs(lateralSpeed) > 0.2) {
-      const gripStrength = keys.space ? 0.4 : 0.85; // handbrake reduces grip
+      const gripStrength = handbrakeActive ? 0.4 : 0.85; // handbrake reduces grip
       // Apply a lateral impulse opposing the slide
       const correctionForce = -lateralSpeed * gripStrength * CAR_MASS * dt;
       car.applyImpulse(
@@ -205,7 +266,7 @@ export function useCarPhysics() {
     }
 
     // Handbrake: also slow down overall
-    if (keys.space) {
+    if (handbrakeActive) {
       const dampedVel = {
         x: currentVel.x * (1 - 1.5 * dt),
         y: currentVel.y,
@@ -270,8 +331,8 @@ export function useCarPhysics() {
     updateCarRotation([0, finalYaw, 0]);
 
     // Regenerate boost slowly
-    if (!keys.shift && boostAmount < 100) {
-      updateBoost(boostAmount + dt * 5);
+    if (!boostActive && boostAmount < 100) {
+      updateBoost(Math.min(boostAmount + dt * 5, 100));
     }
 
     // --- Animate wheels ---
