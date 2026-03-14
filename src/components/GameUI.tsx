@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef } from "react";
+import { TRACKS } from "./trackData";
 import { useGameStore } from "../store/gameStore";
 
 // ── Traffic-light countdown overlay ──────────────────────────────────────────
@@ -119,6 +120,7 @@ function HighScorePanel() {
 
 export function GameUI() {
   const {
+    showMainMenu,
     isPlaying,
     isPaused,
     gameOver,
@@ -129,14 +131,18 @@ export function GameUI() {
     totalRaceTime,
     bestLapTime,
     lastRaceRank,
+    selectedCourseId,
     speed,
     boostAmount,
     hasItem,
+    openMainMenu,
+    openRaceSetup,
+    selectCourse,
     beginCountdown,
     pauseGame,
     resumeGame,
-    resetGame,
   } = useGameStore();
+  const selectedCourse = TRACKS.find((track) => track.id === selectedCourseId) ?? TRACKS[0];
 
   const [showControls, setShowControls] = useState(true);
   const controlsTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -163,6 +169,82 @@ export function GameUI() {
     }
   }, [isPlaying]);
 
+  if (showMainMenu) {
+    return (
+      <div className="absolute inset-0 flex items-center justify-center bg-black/70 z-50">
+        <div className="w-full max-w-5xl mx-4 bg-gradient-to-br from-slate-900 via-blue-950 to-cyan-950 rounded-[2rem] border-4 border-cyan-400/70 shadow-2xl overflow-hidden">
+          <div className="grid md:grid-cols-[1.1fr_0.9fr]">
+            <div className="p-8 md:p-10 border-b md:border-b-0 md:border-r border-white/10">
+              <div className="text-cyan-300 text-sm tracking-[0.35em] uppercase mb-3">
+                Main Menu
+              </div>
+              <h1 className="text-5xl md:text-6xl font-black text-white leading-none mb-4">
+                KART
+                <span className="block text-cyan-300">RACING</span>
+              </h1>
+              <p className="text-slate-200 max-w-xl mb-8">
+                Pick a course, review the leaderboard, then continue to the race setup screen.
+              </p>
+
+              <div className="space-y-4">
+                {TRACKS.map((track) => {
+                  const isSelected = track.id === selectedCourseId;
+
+                  return (
+                    <button
+                      key={track.id}
+                      onClick={() => selectCourse(track.id)}
+                      className={`w-full rounded-2xl border p-5 text-left transition-all ${
+                        isSelected
+                          ? "border-cyan-300 bg-cyan-400/15 shadow-[0_0_0_1px_rgba(103,232,249,0.35)]"
+                          : "border-white/10 bg-white/5 hover:bg-white/10"
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-4">
+                        <div>
+                          <div className="text-2xl font-bold text-white">{track.name}</div>
+                          <div className="text-sm text-cyan-200 mt-1">{track.location}</div>
+                        </div>
+                        <div className="text-right text-xs uppercase tracking-wide text-slate-300">
+                          <div>{track.difficulty}</div>
+                          <div>{track.laps} laps</div>
+                        </div>
+                      </div>
+                      <div className="text-sm text-slate-200 mt-3">{track.description}</div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="p-8 md:p-10 bg-black/20">
+              <div className="rounded-2xl border border-cyan-300/30 bg-black/25 p-5 mb-6">
+                <div className="text-xs uppercase tracking-[0.3em] text-cyan-200 mb-2">
+                  Selected Course
+                </div>
+                <div className="text-3xl font-bold text-white">{selectedCourse.name}</div>
+                <div className="text-slate-300 mt-2">
+                  {selectedCourse.location} · {selectedCourse.difficulty} · {selectedCourse.laps} laps
+                </div>
+              </div>
+
+              <div className="mb-6">
+                <HighScorePanel />
+              </div>
+
+              <button
+                onClick={openRaceSetup}
+                className="w-full bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400 text-slate-950 font-black py-4 px-8 rounded-full text-lg transition-all"
+              >
+                Continue To Race Setup
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // Start screen (also shown while counting down so the 3D scene is visible behind)
   if (!isPlaying && !isCountingDown && !gameOver) {
     return (
@@ -171,7 +253,10 @@ export function GameUI() {
           <h1 className="text-5xl font-bold text-white mb-2 drop-shadow-lg">
             <span className="text-yellow-400">KART</span> RACING
           </h1>
-          <p className="text-gray-300 mb-6">3D Racing Adventure</p>
+          <p className="text-gray-300 mb-2">3D Racing Adventure</p>
+          <div className="text-sm text-cyan-200 mb-6">
+            Course: <span className="font-bold text-white">{selectedCourse.name}</span> · {selectedCourse.laps} laps
+          </div>
 
           <div className="bg-black/30 p-4 rounded-lg mb-6 text-left">
             <h3 className="text-yellow-400 font-bold mb-2">Controls:</h3>
@@ -215,12 +300,20 @@ export function GameUI() {
             <HighScorePanel />
           </div>
 
-          <button
-            onClick={beginCountdown}
-            className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-bold py-4 px-12 rounded-full text-xl transition-all transform hover:scale-105 shadow-lg"
-          >
-            START RACE
-          </button>
+          <div className="flex gap-4 justify-center">
+            <button
+              onClick={openMainMenu}
+              className="bg-gradient-to-r from-gray-500 to-gray-600 hover:from-gray-600 hover:to-gray-700 text-white font-bold py-4 px-8 rounded-full transition-all"
+            >
+              Back
+            </button>
+            <button
+              onClick={beginCountdown}
+              className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-bold py-4 px-12 rounded-full text-xl transition-all transform hover:scale-105 shadow-lg"
+            >
+              START RACE
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -263,7 +356,7 @@ export function GameUI() {
 
           <div className="flex gap-4 justify-center">
             <button
-              onClick={resetGame}
+              onClick={openMainMenu}
               className="bg-gradient-to-r from-gray-500 to-gray-600 hover:from-gray-600 hover:to-gray-700 text-white font-bold py-3 px-8 rounded-full transition-all"
             >
               Main Menu
@@ -294,7 +387,7 @@ export function GameUI() {
               Resume
             </button>
             <button
-              onClick={resetGame}
+              onClick={openMainMenu}
               className="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white font-bold py-3 px-8 rounded-full transition-all"
             >
               Quit
