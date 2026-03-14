@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { TRACK_SOURCES } from "./trackSourceData.js";
 
 export interface TrackDefinition {
   id: string;
@@ -32,83 +33,12 @@ export interface TrackLayout {
 type TrackSource = TrackDefinition & {
   controlPoints: Array<[number, number, number]>;
 };
+const trackSources = TRACK_SOURCES as TrackSource[];
 
 export const TRACK_WIDTH = 20;
 const TRACK_SEGMENTS = 200;
 
-const TRACK_SOURCES: TrackSource[] = [
-  {
-    id: "coastal-gp",
-    name: "Coastal GP",
-    location: "Azure Ridge",
-    difficulty: "Intermediate",
-    laps: 3,
-    description: "Fast sweepers, one heavy hairpin, and a flowing final sector.",
-    controlPoints: [
-      [-50, 0, -55],
-      [-50, 0, 25],
-      [-42, 0, 65],
-      [-10, 0, 100],
-      [30, 0, 108],
-      [65, 0, 92],
-      [85, 0, 60],
-      [88, 0, 28],
-      [85, 0, -2],
-      [108, 0, -25],
-      [85, 0, -48],
-      [58, 0, -58],
-      [32, 0, -42],
-      [18, 0, -68],
-      [-8, 0, -90],
-      [-38, 0, -102],
-      [-60, 0, -92],
-      [-70, 0, -72],
-    ],
-  },
-  {
-    id: "desert-run",
-    name: "Desert Run",
-    location: "Red Mesa",
-    difficulty: "Advanced",
-    laps: 3,
-    description:
-      "A longer, faster loop with a canyon straight, tight infield switchbacks, and an off-camber final bend.",
-    controlPoints: [
-      [-92, 0, -126],
-      [-40, 0, -146],
-      [24, 0, -140],
-      [84, 0, -120],
-      [132, 0, -82],
-      [154, 0, -24],
-      [148, 0, 40],
-      [120, 0, 98],
-      [72, 0, 138],
-      [12, 0, 150],
-      [-52, 0, 142],
-      [-106, 0, 112],
-      [-142, 0, 58],
-      [-152, 0, -2],
-      [-136, 0, -58],
-      [-102, 0, -98],
-      [-58, 0, -116],
-      [-12, 0, -104],
-      [24, 0, -76],
-      [58, 0, -42],
-      [96, 0, -22],
-      [112, 0, 14],
-      [94, 0, 56],
-      [56, 0, 84],
-      [8, 0, 92],
-      [-34, 0, 74],
-      [-58, 0, 34],
-      [-54, 0, -14],
-      [-26, 0, -58],
-      [-40, 0, -94],
-    ],
-  },
-];
-
-export const TRACKS: TrackDefinition[] = TRACK_SOURCES.map(
+export const TRACKS: TrackDefinition[] = trackSources.map(
   ({ controlPoints: _controlPoints, ...definition }) => definition,
 );
 
@@ -172,7 +102,7 @@ const buildTrackLayout = (source: TrackSource): TrackLayout => {
 };
 
 const TRACK_LAYOUTS = Object.fromEntries(
-  TRACK_SOURCES.map((source) => [source.id, buildTrackLayout(source)]),
+  trackSources.map((source) => [source.id, buildTrackLayout(source)]),
 ) as Record<string, TrackLayout>;
 
 export const DEFAULT_TRACK_ID = TRACKS[0]?.id ?? "coastal-gp";
