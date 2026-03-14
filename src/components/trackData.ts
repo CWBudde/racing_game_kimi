@@ -1,5 +1,6 @@
 import * as THREE from "three";
-import { TRACK_SOURCES } from "./trackSourceData.js";
+import { TRACK_SOURCES } from "./trackSourceData";
+import type { TrackSourceDataEntry } from "./trackSourceData";
 
 export interface TrackDefinition {
   id: string;
@@ -30,15 +31,10 @@ export interface TrackLayout {
   };
 }
 
-type TrackSource = TrackDefinition & {
-  controlPoints: Array<[number, number, number]>;
-};
-const trackSources = TRACK_SOURCES as TrackSource[];
-
 export const TRACK_WIDTH = 20;
 const TRACK_SEGMENTS = 200;
 
-export const TRACKS: TrackDefinition[] = trackSources.map(
+export const TRACKS: TrackDefinition[] = TRACK_SOURCES.map(
   ({ controlPoints: _controlPoints, ...definition }) => definition,
 );
 
@@ -71,7 +67,7 @@ const generateTrackWidth = (
   return { left, right };
 };
 
-const buildTrackLayout = (source: TrackSource): TrackLayout => {
+const buildTrackLayout = (source: TrackSourceDataEntry): TrackLayout => {
   const curve = new THREE.CatmullRomCurve3(
     source.controlPoints.map(([x, y, z]) => new THREE.Vector3(x, y, z)),
     true,
@@ -102,7 +98,7 @@ const buildTrackLayout = (source: TrackSource): TrackLayout => {
 };
 
 const TRACK_LAYOUTS = Object.fromEntries(
-  trackSources.map((source) => [source.id, buildTrackLayout(source)]),
+  TRACK_SOURCES.map((source) => [source.id, buildTrackLayout(source)]),
 ) as Record<string, TrackLayout>;
 
 export const DEFAULT_TRACK_ID = TRACKS[0]?.id ?? "coastal-gp";
