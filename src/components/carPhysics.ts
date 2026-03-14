@@ -3,6 +3,7 @@ import { useFrame } from "@react-three/fiber";
 import { type RapierRigidBody } from "@react-three/rapier";
 import * as THREE from "three";
 import { useGameStore } from "../store/gameStore";
+import { TRACK_POINTS } from "./trackData";
 
 // Input state (exported so mobile controller can drive it)
 export const keys = {
@@ -86,7 +87,12 @@ export function useCarPhysics() {
     updateCarRotation,
     boostAmount,
     updateBoost,
+    completeLap,
   } = useGameStore();
+
+  // Lap detection state
+  const trackProgressRef = useRef(0);
+  const hasPassedMidRef = useRef(false);
 
   const [localSpeed, setLocalSpeed] = useState(0);
 
@@ -124,13 +130,6 @@ export function useCarPhysics() {
     const steerLerp = 1 - Math.pow(0.001, dt);
     steeringRef.current += (targetSteering - steeringRef.current) * steerLerp;
     const currentSteering = steeringRef.current;
-
-    // --- DEBUG: log velocity when coasting ---
-    if (!keys.w && !keys.s && Math.abs(forwardSpeed) > 0.05) {
-      console.log(
-        `coast: fwdSpeed=${forwardSpeed.toFixed(3)} speed=${speed.toFixed(3)} vel=(${currentVel.x.toFixed(2)}, ${currentVel.z.toFixed(2)}) yaw=${yaw.toFixed(3)}`,
-      );
-    }
 
     // --- Acceleration / braking ---
     let acceleration = 0;
@@ -237,6 +236,29 @@ export function useCarPhysics() {
       },
       true,
     );
+
+    // --- Lap detection: find closest track point, detect wrap-around ---
+    {
+      const pos = car.translation();
+      let minDist2 = Infinity;
+      let closestIdx = 0;
+      for (let i = 0; i < TRACK_POINTS.length; i++) {
+        const dx = TRACK_POINTS[i].x - pos.x;
+        const dz = TRACK_POINTS[i].z - pos.z;
+        const d2 = dx * dx + dz * dz;
+        if (d2 < minDist2) { minDist2 = d2; closestIdx = i; }
+      }
+      const progress = closestIdx / TRACK_POINTS.length;
+      const prevProgress = trackProgressRef.current;
+
+      if (progress > 0.4 && progress < 0.6) hasPassedMidRef.current = true;
+
+      if (prevProgress > 0.85 && progress < 0.15 && hasPassedMidRef.current) {
+        completeLap();
+        hasPassedMidRef.current = false;
+      }
+      trackProgressRef.current = progress;
+    }
 
     // --- Update game state ---
     const pos = car.translation();

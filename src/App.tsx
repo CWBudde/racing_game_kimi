@@ -7,6 +7,7 @@ import { getTrackStart } from "./components/trackData";
 import { Car } from "./components/Car";
 import { CameraController } from "./components/CameraController";
 import { Environment } from "./components/Environment";
+import { AIOpponent } from "./components/AIOpponent";
 import { GameUI } from "./components/GameUI";
 import { MobileController } from "./components/MobileController";
 import { useGameStore } from "./store/gameStore";
@@ -50,6 +51,10 @@ function GameScene() {
 
         {/* Player Car - spawn on track at start/finish line */}
         <Car position={getTrackStart().position} />
+
+        {/* AI Opponents */}
+        <AIOpponent color="#2563eb" carNumber={2} startT={0.97} speedT={0.048} />
+        <AIOpponent color="#16a34a" carNumber={3} startT={0.94} speedT={0.042} />
 
         {/* Environment */}
         <Environment />

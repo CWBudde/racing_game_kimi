@@ -36,7 +36,7 @@ export const TRACK_WIDTH = 20;
 const TRACK_SEGMENTS = 200;
 
 // Smooth closed spline through control points (centripetal avoids cusps)
-const trackCurve = new THREE.CatmullRomCurve3(
+export const trackCurve = new THREE.CatmullRomCurve3(
   CONTROL_POINTS,
   true, // closed
   "centripetal",
