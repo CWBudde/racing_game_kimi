@@ -9,7 +9,7 @@ export function CameraController() {
   const targetLookAt = useRef(new THREE.Vector3());
   const currentLookAt = useRef(new THREE.Vector3());
 
-  const { carPosition, carRotation, speed, isPlaying } = useGameStore();
+  const { carPosition, carRotation, speed } = useGameStore();
 
   // Camera settings
   const CAMERA_HEIGHT = 8;
@@ -19,7 +19,6 @@ export function CameraController() {
   const MAX_SPEED = 80;
 
   useFrame(() => {
-    if (!isPlaying) return;
 
     // Cast camera to PerspectiveCamera to access fov
     const perspCamera = camera as THREE.PerspectiveCamera;
