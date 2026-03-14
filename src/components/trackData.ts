@@ -9,7 +9,34 @@ export interface TrackDefinition {
   description: string;
 }
 
-export const TRACKS: TrackDefinition[] = [
+export interface BarrierSegment {
+  position: THREE.Vector3;
+  angle: number;
+  length: number;
+}
+
+export interface TrackLayout {
+  definition: TrackDefinition;
+  curve: THREE.CatmullRomCurve3;
+  points: THREE.Vector3[];
+  sides: {
+    left: THREE.Vector3[];
+    right: THREE.Vector3[];
+  };
+  start: {
+    position: [number, number, number];
+    yaw: number;
+  };
+}
+
+type TrackSource = TrackDefinition & {
+  controlPoints: Array<[number, number, number]>;
+};
+
+export const TRACK_WIDTH = 20;
+const TRACK_SEGMENTS = 200;
+
+const TRACK_SOURCES: TrackSource[] = [
   {
     id: "coastal-gp",
     name: "Coastal GP",
@@ -17,54 +44,73 @@ export const TRACKS: TrackDefinition[] = [
     difficulty: "Intermediate",
     laps: 3,
     description: "Fast sweepers, one heavy hairpin, and a flowing final sector.",
+    controlPoints: [
+      [-50, 0, -55],
+      [-50, 0, 25],
+      [-42, 0, 65],
+      [-10, 0, 100],
+      [30, 0, 108],
+      [65, 0, 92],
+      [85, 0, 60],
+      [88, 0, 28],
+      [85, 0, -2],
+      [108, 0, -25],
+      [85, 0, -48],
+      [58, 0, -58],
+      [32, 0, -42],
+      [18, 0, -68],
+      [-8, 0, -90],
+      [-38, 0, -102],
+      [-60, 0, -92],
+      [-70, 0, -72],
+    ],
+  },
+  {
+    id: "desert-run",
+    name: "Desert Run",
+    location: "Red Mesa",
+    difficulty: "Advanced",
+    laps: 3,
+    description:
+      "A longer, faster loop with a canyon straight, tight infield switchbacks, and an off-camber final bend.",
+    controlPoints: [
+      [-34, 0, -108],
+      [-18, 0, -54],
+      [2, 0, 6],
+      [30, 0, 66],
+      [72, 0, 112],
+      [118, 0, 120],
+      [150, 0, 86],
+      [144, 0, 34],
+      [118, 0, -10],
+      [86, 0, -32],
+      [118, 0, -58],
+      [144, 0, -92],
+      [128, 0, -132],
+      [72, 0, -146],
+      [20, 0, -132],
+      [-18, 0, -144],
+      [-72, 0, -122],
+      [-104, 0, -78],
+      [-118, 0, -12],
+      [-108, 0, 48],
+      [-82, 0, 92],
+      [-42, 0, 108],
+      [-12, 0, 84],
+      [-22, 0, 24],
+      [-56, 0, -18],
+      [-92, 0, -50],
+      [-78, 0, -94],
+    ],
   },
 ];
 
-// ── Racing circuit layout via control points ──
-// A proper GP-style circuit with varied corners: fast sweepers, a hairpin,
-// S-curves, and long straights.
-const CONTROL_POINTS = [
-  // Main straight (car starts here, heading +Z)
-  new THREE.Vector3(-50, 0, -55),
-  new THREE.Vector3(-50, 0, 25),
-  // Turn 1 — fast right sweeper
-  new THREE.Vector3(-42, 0, 65),
-  new THREE.Vector3(-10, 0, 100),
-  new THREE.Vector3(30, 0, 108),
-  // Turn 2 — medium right
-  new THREE.Vector3(65, 0, 92),
-  new THREE.Vector3(85, 0, 60),
-  // Short straight into hairpin
-  new THREE.Vector3(88, 0, 28),
-  // Turn 3 — hairpin right
-  new THREE.Vector3(85, 0, -2),
-  new THREE.Vector3(108, 0, -25),
-  new THREE.Vector3(85, 0, -48),
-  // S-curves
-  new THREE.Vector3(58, 0, -58),
-  new THREE.Vector3(32, 0, -42),
-  new THREE.Vector3(18, 0, -68),
-  // Turn 6 — long left sweeper toward finish
-  new THREE.Vector3(-8, 0, -90),
-  new THREE.Vector3(-38, 0, -102),
-  // Final section back to start
-  new THREE.Vector3(-60, 0, -92),
-  new THREE.Vector3(-70, 0, -72),
-];
-
-export const TRACK_WIDTH = 20;
-const TRACK_SEGMENTS = 200;
-
-// Smooth closed spline through control points (centripetal avoids cusps)
-export const trackCurve = new THREE.CatmullRomCurve3(
-  CONTROL_POINTS,
-  true, // closed
-  "centripetal",
+export const TRACKS: TrackDefinition[] = TRACK_SOURCES.map(
+  ({ controlPoints: _controlPoints, ...definition }) => definition,
 );
 
-const generateTrackPoints = (): THREE.Vector3[] => {
-  const pts = trackCurve.getSpacedPoints(TRACK_SEGMENTS);
-  // getSpacedPoints returns N+1 points for a closed curve; drop the duplicate
+const generateTrackPoints = (curve: THREE.CatmullRomCurve3): THREE.Vector3[] => {
+  const pts = curve.getSpacedPoints(TRACK_SEGMENTS);
   return pts.slice(0, -1);
 };
 
@@ -92,19 +138,54 @@ const generateTrackWidth = (
   return { left, right };
 };
 
-// Pre-compute so other modules can use them
-export const TRACK_POINTS = generateTrackPoints();
-export const TRACK_SIDES = generateTrackWidth(TRACK_POINTS, TRACK_WIDTH);
+const buildTrackLayout = (source: TrackSource): TrackLayout => {
+  const curve = new THREE.CatmullRomCurve3(
+    source.controlPoints.map(([x, y, z]) => new THREE.Vector3(x, y, z)),
+    true,
+    "centripetal",
+  );
+  const points = generateTrackPoints(curve);
+  const sides = generateTrackWidth(points, TRACK_WIDTH);
+  const p0 = points[0];
+  const p3 = points[3];
 
-// ── Barrier segment generation along a polyline at fixed arc-length intervals ──
-// Samples a closed polyline at every `spacing` world units and returns
-// {position, angle, length} for each barrier panel — independently for each side.
-export interface BarrierSegment {
-  position: THREE.Vector3;
-  angle: number;
-  length: number;
+  return {
+    definition: {
+      id: source.id,
+      name: source.name,
+      location: source.location,
+      difficulty: source.difficulty,
+      laps: source.laps,
+      description: source.description,
+    },
+    curve,
+    points,
+    sides,
+    start: {
+      position: [p0.x, p0.y + 2, p0.z],
+      yaw: Math.atan2(p3.x - p0.x, p3.z - p0.z),
+    },
+  };
+};
+
+const TRACK_LAYOUTS = Object.fromEntries(
+  TRACK_SOURCES.map((source) => [source.id, buildTrackLayout(source)]),
+) as Record<string, TrackLayout>;
+
+export const DEFAULT_TRACK_ID = TRACKS[0]?.id ?? "coastal-gp";
+
+export function getTrackLayout(trackId: string): TrackLayout {
+  return TRACK_LAYOUTS[trackId] ?? TRACK_LAYOUTS[DEFAULT_TRACK_ID];
 }
 
+export function getTrackStart(trackId = DEFAULT_TRACK_ID): {
+  position: [number, number, number];
+  yaw: number;
+} {
+  return getTrackLayout(trackId).start;
+}
+
+// Samples a closed polyline at fixed intervals and returns barrier panels.
 export function generateBarrierSegments(
   polyline: THREE.Vector3[],
   spacing: number,
@@ -112,31 +193,37 @@ export function generateBarrierSegments(
   const segments: BarrierSegment[] = [];
   const n = polyline.length;
 
-  // Build cumulative arc-length table
   const arcLen: number[] = [0];
   for (let i = 0; i < n; i++) {
     const ni = (i + 1) % n;
     arcLen.push(arcLen[i] + polyline[i].distanceTo(polyline[ni]));
   }
-  const totalLen = arcLen[n]; // arc-length of full closed loop
+  const totalLen = arcLen[n];
 
-  // Sample at fixed intervals
   let sampleDist = 0;
   let segIdx = 0;
 
   while (sampleDist < totalLen) {
     const nextDist = Math.min(sampleDist + spacing, totalLen);
 
-    // Find polyline point at sampleDist
     while (segIdx < n - 1 && arcLen[segIdx + 1] < sampleDist) segIdx++;
-    const t0 = (sampleDist - arcLen[segIdx]) / (arcLen[segIdx + 1] - arcLen[segIdx]);
-    const p0 = new THREE.Vector3().lerpVectors(polyline[segIdx], polyline[(segIdx + 1) % n], t0);
+    const t0 =
+      (sampleDist - arcLen[segIdx]) / (arcLen[segIdx + 1] - arcLen[segIdx]);
+    const p0 = new THREE.Vector3().lerpVectors(
+      polyline[segIdx],
+      polyline[(segIdx + 1) % n],
+      t0,
+    );
 
-    // Find polyline point at nextDist
     let endIdx = segIdx;
     while (endIdx < n - 1 && arcLen[endIdx + 1] < nextDist) endIdx++;
-    const t1 = (nextDist - arcLen[endIdx]) / (arcLen[endIdx + 1] - arcLen[endIdx]);
-    const p1 = new THREE.Vector3().lerpVectors(polyline[endIdx], polyline[(endIdx + 1) % n], t1);
+    const t1 =
+      (nextDist - arcLen[endIdx]) / (arcLen[endIdx + 1] - arcLen[endIdx]);
+    const p1 = new THREE.Vector3().lerpVectors(
+      polyline[endIdx],
+      polyline[(endIdx + 1) % n],
+      t1,
+    );
 
     const len = p0.distanceTo(p1);
     if (len > 0.01) {
@@ -153,29 +240,15 @@ export function generateBarrierSegments(
   return segments;
 }
 
-// ── Car spawn helper ──
-export function getTrackStart(): {
-  position: [number, number, number];
-  yaw: number;
-} {
-  const p0 = TRACK_POINTS[0];
-  const p3 = TRACK_POINTS[3]; // look a few points ahead for a stable heading
-  const yaw = Math.atan2(p3.x - p0.x, p3.z - p0.z);
-  return { position: [p0.x, p0.y + 2, p0.z], yaw };
-}
-
-// ── Road surface texture with lane markings ──
 export const createRoadTexture = (): HTMLCanvasElement => {
   const canvas = document.createElement("canvas");
   canvas.width = 256;
   canvas.height = 256;
   const ctx = canvas.getContext("2d")!;
 
-  // Asphalt base
   ctx.fillStyle = "#3a3a3a";
   ctx.fillRect(0, 0, 256, 256);
 
-  // Fine grain noise for realism
   for (let i = 0; i < 2000; i++) {
     const x = Math.random() * 256;
     const y = Math.random() * 256;
@@ -184,12 +257,10 @@ export const createRoadTexture = (): HTMLCanvasElement => {
     ctx.fillRect(x, y, 2, 2);
   }
 
-  // White edge lines
   ctx.fillStyle = "#dddddd";
-  ctx.fillRect(0, 0, 8, 256); // left edge
-  ctx.fillRect(248, 0, 8, 256); // right edge
+  ctx.fillRect(0, 0, 8, 256);
+  ctx.fillRect(248, 0, 8, 256);
 
-  // Dashed center line
   ctx.fillStyle = "#cccccc";
   for (let y = 0; y < 256; y += 48) {
     ctx.fillRect(124, y, 8, 28);

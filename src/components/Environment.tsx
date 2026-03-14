@@ -2,7 +2,8 @@ import { useRef, useMemo } from "react";
 import { useFrame } from "@react-three/fiber";
 import { RigidBody, CuboidCollider } from "@react-three/rapier";
 import * as THREE from "three";
-import { TRACK_POINTS } from "./trackData";
+import { getTrackLayout } from "./trackData";
+import { useGameStore } from "../store/gameStore";
 
 // Tree component
 function Tree({
@@ -155,9 +156,9 @@ function ItemBox({ position }: { position: [number, number, number] }) {
 // Minimum distance from track centerline before placing objects
 const TRACK_CLEARANCE = 18;
 
-function tooCloseToTrack(x: number, z: number): boolean {
+function tooCloseToTrack(trackPoints: THREE.Vector3[], x: number, z: number): boolean {
   const c2 = TRACK_CLEARANCE * TRACK_CLEARANCE;
-  for (const pt of TRACK_POINTS) {
+  for (const pt of trackPoints) {
     const dx = pt.x - x;
     const dz = pt.z - z;
     if (dx * dx + dz * dz < c2) return true;
@@ -167,6 +168,12 @@ function tooCloseToTrack(x: number, z: number): boolean {
 
 // Main Environment component
 export function Environment() {
+  const selectedCourseId = useGameStore((state) => state.selectedCourseId);
+  const trackPoints = useMemo(
+    () => getTrackLayout(selectedCourseId).points,
+    [selectedCourseId],
+  );
+
   // Generate tree positions — two rings: near-track and far-field
   const trees = useMemo(() => {
     const positions: { position: [number, number, number]; scale: number }[] =
@@ -178,7 +185,7 @@ export function Environment() {
       const radius = 80 + Math.random() * 60;
       const x = Math.cos(angle) * radius;
       const z = Math.sin(angle) * radius;
-      if (tooCloseToTrack(x, z)) continue;
+      if (tooCloseToTrack(trackPoints, x, z)) continue;
       positions.push({
         position: [x, 0, z],
         scale: 0.8 + Math.random() * 0.6,
@@ -209,14 +216,14 @@ export function Environment() {
       const radius = 70 + Math.random() * 180;
       const x = Math.cos(angle) * radius;
       const z = Math.sin(angle) * radius;
-      if (tooCloseToTrack(x, z)) continue;
+      if (tooCloseToTrack(trackPoints, x, z)) continue;
       positions.push({
         position: [x, 0.5, z],
         scale: 0.5 + Math.random() * 1.2,
       });
     }
     return positions;
-  }, []);
+  }, [trackPoints]);
 
   // Generate cloud positions — spread across the wider sky
   const clouds = useMemo(() => {
@@ -233,19 +240,19 @@ export function Environment() {
       });
     }
     return positions;
-  }, []);
+  }, [trackPoints]);
 
   // Place item boxes along the track (offset from checkpoints)
   const itemBoxes = useMemo(() => {
     const positions: [number, number, number][] = [];
-    const n = TRACK_POINTS.length;
+    const n = trackPoints.length;
     for (let i = 0; i < 8; i++) {
       const idx = Math.floor((i / 8) * n + n / 16) % n;
-      const point = TRACK_POINTS[idx];
+      const point = trackPoints[idx];
       positions.push([point.x, 2, point.z]);
     }
     return positions;
-  }, []);
+  }, [trackPoints]);
 
   return (
     <group>

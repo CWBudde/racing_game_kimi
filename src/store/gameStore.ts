@@ -1,10 +1,10 @@
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
-import { getTrackStart } from '../components/trackData';
-import { TRACKS } from '../components/trackData';
+import { getTrackStart, TRACKS } from '../components/trackData';
 
-const trackStart = getTrackStart();
 const HIGHSCORE_STORAGE_KEY = 'kart-racing-highscores';
+const initialTrackId = TRACKS[0]?.id ?? 'default-track';
+const initialTrackStart = getTrackStart(initialTrackId);
 
 export interface HighScoreEntry {
   id: string;
@@ -105,7 +105,7 @@ export const useGameStore = create<GameState>()(
     isPaused: false,
     gameOver: false,
     isCountingDown: false,
-    selectedCourseId: TRACKS[0]?.id ?? 'default-track',
+    selectedCourseId: initialTrackId,
     
     lap: 1,
     totalLaps: 3,
@@ -122,119 +122,137 @@ export const useGameStore = create<GameState>()(
     hasItem: false,
     currentItem: null,
     
-    carPosition: trackStart.position,
-    carRotation: [0, trackStart.yaw, 0],
+    carPosition: initialTrackStart.position,
+    carRotation: [0, initialTrackStart.yaw, 0],
     
     // Game flow actions
-    openMainMenu: () => set({
-      showMainMenu: true,
-      isPlaying: false,
-      isPaused: false,
-      gameOver: false,
-      isCountingDown: false,
-      lap: 1,
-      lapTimes: [],
-      currentLapTime: 0,
-      totalRaceTime: 0,
-      bestLapTime: null,
-      lastRaceRank: null,
-      speed: 0,
-      boostAmount: 100,
-      hasItem: false,
-      currentItem: null,
-      carPosition: trackStart.position,
-      carRotation: [0, trackStart.yaw, 0],
+    openMainMenu: () => set(() => {
+      const trackStart = getTrackStart(get().selectedCourseId);
+      return {
+        showMainMenu: true,
+        isPlaying: false,
+        isPaused: false,
+        gameOver: false,
+        isCountingDown: false,
+        lap: 1,
+        lapTimes: [],
+        currentLapTime: 0,
+        totalRaceTime: 0,
+        bestLapTime: null,
+        lastRaceRank: null,
+        speed: 0,
+        boostAmount: 100,
+        hasItem: false,
+        currentItem: null,
+        carPosition: trackStart.position,
+        carRotation: [0, trackStart.yaw, 0],
+      };
     }),
-    openRaceSetup: () => set({
-      showMainMenu: false,
-      isPlaying: false,
-      isPaused: false,
-      gameOver: false,
-      isCountingDown: false,
-      lap: 1,
-      lapTimes: [],
-      currentLapTime: 0,
-      totalRaceTime: 0,
-      bestLapTime: null,
-      lastRaceRank: null,
-      speed: 0,
-      boostAmount: 100,
-      hasItem: false,
-      currentItem: null,
-      carPosition: trackStart.position,
-      carRotation: [0, trackStart.yaw, 0],
+    openRaceSetup: () => set(() => {
+      const trackStart = getTrackStart(get().selectedCourseId);
+      return {
+        showMainMenu: false,
+        isPlaying: false,
+        isPaused: false,
+        gameOver: false,
+        isCountingDown: false,
+        lap: 1,
+        lapTimes: [],
+        currentLapTime: 0,
+        totalRaceTime: 0,
+        bestLapTime: null,
+        lastRaceRank: null,
+        speed: 0,
+        boostAmount: 100,
+        hasItem: false,
+        currentItem: null,
+        carPosition: trackStart.position,
+        carRotation: [0, trackStart.yaw, 0],
+      };
     }),
     selectCourse: (courseId) => {
       const track = TRACKS.find((entry) => entry.id === courseId);
       if (!track) return;
+      const trackStart = getTrackStart(courseId);
 
       set({
         selectedCourseId: courseId,
         totalLaps: track.laps,
+        carPosition: trackStart.position,
+        carRotation: [0, trackStart.yaw, 0],
       });
     },
-    beginCountdown: () => set({
-      showMainMenu: false,
-      isCountingDown: true,
-      isPlaying: false,
-      isPaused: false,
-      gameOver: false,
-      lap: 1,
-      lapTimes: [],
-      currentLapTime: 0,
-      totalRaceTime: 0,
-      bestLapTime: null,
-      lastRaceRank: null,
-      speed: 0,
-      boostAmount: 100,
-      hasItem: false,
-      currentItem: null,
-      carPosition: trackStart.position,
-      carRotation: [0, trackStart.yaw, 0],
+    beginCountdown: () => set((state) => {
+      const trackStart = getTrackStart(state.selectedCourseId);
+      return {
+        showMainMenu: false,
+        isCountingDown: true,
+        isPlaying: false,
+        isPaused: false,
+        gameOver: false,
+        lap: 1,
+        lapTimes: [],
+        currentLapTime: 0,
+        totalRaceTime: 0,
+        bestLapTime: null,
+        lastRaceRank: null,
+        speed: 0,
+        boostAmount: 100,
+        hasItem: false,
+        currentItem: null,
+        carPosition: trackStart.position,
+        carRotation: [0, trackStart.yaw, 0],
+      };
     }),
 
-    startGame: () => set({
-      showMainMenu: false,
-      isPlaying: true,
-      isCountingDown: false,
-      isPaused: false,
-      gameOver: false,
-      lap: 1,
-      lapTimes: [],
-      currentLapTime: 0,
-      totalRaceTime: 0,
-      bestLapTime: null,
-      lastRaceRank: null,
-      speed: 0,
-      boostAmount: 100,
-      hasItem: false,
-      currentItem: null,
-      carPosition: trackStart.position,
-      carRotation: [0, trackStart.yaw, 0]
+    startGame: () => set((state) => {
+      const trackStart = getTrackStart(state.selectedCourseId);
+      return {
+        showMainMenu: false,
+        isPlaying: true,
+        isCountingDown: false,
+        isPaused: false,
+        gameOver: false,
+        lap: 1,
+        lapTimes: [],
+        currentLapTime: 0,
+        totalRaceTime: 0,
+        bestLapTime: null,
+        lastRaceRank: null,
+        speed: 0,
+        boostAmount: 100,
+        hasItem: false,
+        currentItem: null,
+        carPosition: trackStart.position,
+        carRotation: [0, trackStart.yaw, 0]
+      };
     }),
     
     pauseGame: () => set({ isPaused: true }),
     resumeGame: () => set({ isPaused: false }),
     endGame: () => set({ isPlaying: false, gameOver: true }),
     
-    resetGame: () => set({
-      showMainMenu: true,
-      isPlaying: false,
-      isPaused: false,
-      gameOver: false,
-      isCountingDown: false,
-      lap: 1,
-      lapTimes: [],
-      currentLapTime: 0,
-      totalRaceTime: 0,
-      bestLapTime: null,
-      lastRaceRank: null,
-      speed: 0,
-      boostAmount: 100,
-      hasItem: false,
-      currentItem: null,
-      carPosition: trackStart.position,
-      carRotation: [0, trackStart.yaw, 0]
+    resetGame: () => set((state) => {
+      const trackStart = getTrackStart(state.selectedCourseId);
+      return {
+        showMainMenu: true,
+        isPlaying: false,
+        isPaused: false,
+        gameOver: false,
+        isCountingDown: false,
+        lap: 1,
+        lapTimes: [],
+        currentLapTime: 0,
+        totalRaceTime: 0,
+        bestLapTime: null,
+        lastRaceRank: null,
+        speed: 0,
+        boostAmount: 100,
+        hasItem: false,
+        currentItem: null,
+        carPosition: trackStart.position,
+        carRotation: [0, trackStart.yaw, 0]
+      };
     }),
     
     // Lap actions

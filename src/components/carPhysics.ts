@@ -3,7 +3,7 @@ import { useFrame } from "@react-three/fiber";
 import { type RapierRigidBody } from "@react-three/rapier";
 import * as THREE from "three";
 import { useGameStore } from "../store/gameStore";
-import { TRACK_POINTS } from "./trackData";
+import { getTrackLayout } from "./trackData";
 
 // Input state (exported so mobile controller can drive it)
 export const keys = {
@@ -138,6 +138,7 @@ export function useCarPhysics() {
   const {
     isPlaying,
     isPaused,
+    selectedCourseId,
     updateSpeed,
     updateCarPosition,
     updateCarRotation,
@@ -151,6 +152,7 @@ export function useCarPhysics() {
   const hasPassedMidRef = useRef(false);
 
   const [localSpeed, setLocalSpeed] = useState(0);
+  const trackPoints = getTrackLayout(selectedCourseId).points;
 
   useKeyboardInput();
 
@@ -303,13 +305,13 @@ export function useCarPhysics() {
       const pos = car.translation();
       let minDist2 = Infinity;
       let closestIdx = 0;
-      for (let i = 0; i < TRACK_POINTS.length; i++) {
-        const dx = TRACK_POINTS[i].x - pos.x;
-        const dz = TRACK_POINTS[i].z - pos.z;
+      for (let i = 0; i < trackPoints.length; i++) {
+        const dx = trackPoints[i].x - pos.x;
+        const dz = trackPoints[i].z - pos.z;
         const d2 = dx * dx + dz * dz;
         if (d2 < minDist2) { minDist2 = d2; closestIdx = i; }
       }
-      const progress = closestIdx / TRACK_POINTS.length;
+      const progress = closestIdx / trackPoints.length;
       const prevProgress = trackProgressRef.current;
 
       if (progress > 0.4 && progress < 0.6) hasPassedMidRef.current = true;

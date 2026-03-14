@@ -3,7 +3,7 @@ import { useFrame } from "@react-three/fiber";
 import { RigidBody, CuboidCollider } from "@react-three/rapier";
 import type { RapierRigidBody } from "@react-three/rapier";
 import * as THREE from "three";
-import { trackCurve } from "./trackData";
+import { getTrackLayout } from "./trackData";
 import { useGameStore } from "../store/gameStore";
 
 interface AIOpponentProps {
@@ -19,7 +19,11 @@ export function AIOpponent({ color, carNumber, startT, speedT }: AIOpponentProps
   const wheelGroupRef = useRef<THREE.Group>(null);
   const wheelRotRef = useRef(0);
 
-  const { isPlaying, isPaused } = useGameStore();
+  const { isPlaying, isPaused, selectedCourseId } = useGameStore();
+  const trackCurve = useMemo(
+    () => getTrackLayout(selectedCourseId).curve,
+    [selectedCourseId],
+  );
 
   // Compute initial position/rotation for the RigidBody spawn
   const initialState = useMemo(() => {

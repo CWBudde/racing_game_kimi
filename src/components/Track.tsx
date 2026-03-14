@@ -2,15 +2,22 @@ import { useRef, useMemo } from "react";
 import { useFrame } from "@react-three/fiber";
 import { RigidBody, CuboidCollider } from "@react-three/rapier";
 import * as THREE from "three";
-import { TRACK_POINTS, TRACK_SIDES, generateBarrierSegments, createRoadTexture } from "./trackData";
+import {
+  createRoadTexture,
+  generateBarrierSegments,
+  getTrackLayout,
+} from "./trackData";
+import { useGameStore } from "../store/gameStore";
 
 // ── Track component ──
 export function Track() {
   const trackRef = useRef<THREE.Group>(null);
   const checkpointsRef = useRef<THREE.Group>(null);
+  const selectedCourseId = useGameStore((state) => state.selectedCourseId);
+  const layout = useMemo(() => getTrackLayout(selectedCourseId), [selectedCourseId]);
 
-  const trackPoints = TRACK_POINTS;
-  const { left, right } = TRACK_SIDES;
+  const trackPoints = layout.points;
+  const { left, right } = layout.sides;
 
   // Road surface geometry (closed-loop quad strip with distance-based UVs)
   const trackGeometry = useMemo(() => {

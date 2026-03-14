@@ -14,7 +14,8 @@ import { useGameStore } from "./store/gameStore";
 import "./App.css";
 
 function GameScene() {
-  const { isPlaying, isPaused, updateLapTime } = useGameStore();
+  const { isPlaying, isPaused, updateLapTime, selectedCourseId } = useGameStore();
+  const playerStart = getTrackStart(selectedCourseId);
 
   // Update lap time
   useEffect(() => {
@@ -50,11 +51,23 @@ function GameScene() {
         <Track />
 
         {/* Player Car - spawn on track at start/finish line */}
-        <Car position={getTrackStart().position} />
+        <Car key={`player-${selectedCourseId}`} position={playerStart.position} />
 
         {/* AI Opponents */}
-        <AIOpponent color="#2563eb" carNumber={2} startT={0.97} speedT={0.048} />
-        <AIOpponent color="#16a34a" carNumber={3} startT={0.94} speedT={0.042} />
+        <AIOpponent
+          key={`ai-2-${selectedCourseId}`}
+          color="#2563eb"
+          carNumber={2}
+          startT={0.97}
+          speedT={0.048}
+        />
+        <AIOpponent
+          key={`ai-3-${selectedCourseId}`}
+          color="#16a34a"
+          carNumber={3}
+          startT={0.94}
+          speedT={0.042}
+        />
 
         {/* Environment */}
         <Environment />
