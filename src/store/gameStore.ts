@@ -3,6 +3,44 @@ import { subscribeWithSelector } from 'zustand/middleware';
 import { getTrackStart } from '../components/trackData';
 
 const trackStart = getTrackStart();
+const HIGHSCORE_STORAGE_KEY = 'kart-racing-highscores';
+
+export interface HighScoreEntry {
+  id: string;
+  totalTime: number;
+  bestLapTime: number;
+  achievedAt: string;
+}
+
+const loadHighScores = (): HighScoreEntry[] => {
+  if (typeof window === 'undefined') return [];
+
+  try {
+    const raw = window.localStorage.getItem(HIGHSCORE_STORAGE_KEY);
+    if (!raw) return [];
+
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+
+    return parsed
+      .filter((entry): entry is HighScoreEntry =>
+        !!entry &&
+        typeof entry.id === 'string' &&
+        typeof entry.totalTime === 'number' &&
+        typeof entry.bestLapTime === 'number' &&
+        typeof entry.achievedAt === 'string'
+      )
+      .sort((a, b) => a.totalTime - b.totalTime)
+      .slice(0, 5);
+  } catch {
+    return [];
+  }
+};
+
+const saveHighScores = (entries: HighScoreEntry[]) => {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(HIGHSCORE_STORAGE_KEY, JSON.stringify(entries));
+};
 
 export interface GameState {
   // Game status
@@ -18,6 +56,8 @@ export interface GameState {
   currentLapTime: number;
   totalRaceTime: number;
   bestLapTime: number | null;
+  highScores: HighScoreEntry[];
+  lastRaceRank: number | null;
   
   // Car stats
   speed: number;
@@ -65,6 +105,8 @@ export const useGameStore = create<GameState>()(
     currentLapTime: 0,
     totalRaceTime: 0,
     bestLapTime: null,
+    highScores: loadHighScores(),
+    lastRaceRank: null,
     
     speed: 0,
     maxSpeed: 80,
@@ -85,6 +127,8 @@ export const useGameStore = create<GameState>()(
       lapTimes: [],
       currentLapTime: 0,
       totalRaceTime: 0,
+      bestLapTime: null,
+      lastRaceRank: null,
       speed: 0,
       boostAmount: 100,
       hasItem: false,
@@ -102,6 +146,8 @@ export const useGameStore = create<GameState>()(
       lapTimes: [],
       currentLapTime: 0,
       totalRaceTime: 0,
+      bestLapTime: null,
+      lastRaceRank: null,
       speed: 0,
       boostAmount: 100,
       hasItem: false,
@@ -124,6 +170,7 @@ export const useGameStore = create<GameState>()(
       currentLapTime: 0,
       totalRaceTime: 0,
       bestLapTime: null,
+      lastRaceRank: null,
       speed: 0,
       boostAmount: 100,
       hasItem: false,
@@ -141,7 +188,25 @@ export const useGameStore = create<GameState>()(
         : state.currentLapTime;
       
       if (state.lap >= state.totalLaps) {
-        set({ gameOver: true, isPlaying: false });
+        const entry: HighScoreEntry = {
+          id: `${Date.now()}`,
+          totalTime: state.totalRaceTime,
+          bestLapTime: newBestLap,
+          achievedAt: new Date().toISOString(),
+        };
+        const highScores = [...state.highScores, entry]
+          .sort((a, b) => a.totalTime - b.totalTime)
+          .slice(0, 5);
+        saveHighScores(highScores);
+
+        set({
+          gameOver: true,
+          isPlaying: false,
+          lapTimes: newLapTimes,
+          bestLapTime: newBestLap,
+          highScores,
+          lastRaceRank: highScores.findIndex((score) => score.id === entry.id) + 1 || null,
+        });
       } else {
         set({
           lap: state.lap + 1,

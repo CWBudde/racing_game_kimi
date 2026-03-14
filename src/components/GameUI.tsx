@@ -83,6 +83,40 @@ const formatTime = (seconds: number): string => {
   return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}.${ms.toString().padStart(2, "0")}`;
 };
 
+function HighScorePanel() {
+  const { highScores, lastRaceRank } = useGameStore();
+
+  return (
+    <div className="bg-black/30 p-4 rounded-lg text-left">
+      <div className="flex items-center justify-between gap-4 mb-3">
+        <h3 className="text-yellow-400 font-bold">Top 5</h3>
+        {lastRaceRank && (
+          <span className="text-xs text-green-300">Latest finish: #{lastRaceRank}</span>
+        )}
+      </div>
+
+      {highScores.length === 0 ? (
+        <div className="text-sm text-gray-300">No recorded runs yet.</div>
+      ) : (
+        <div className="space-y-2">
+          {highScores.map((score, index) => (
+            <div
+              key={score.id}
+              className="grid grid-cols-[2rem_1fr_auto] gap-3 text-sm text-white"
+            >
+              <div className="text-yellow-300 font-bold">{index + 1}.</div>
+              <div className="font-mono">{formatTime(score.totalTime)}</div>
+              <div className="text-gray-400 text-xs">
+                Best {formatTime(score.bestLapTime)}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function GameUI() {
   const {
     isPlaying,
@@ -94,6 +128,7 @@ export function GameUI() {
     currentLapTime,
     totalRaceTime,
     bestLapTime,
+    lastRaceRank,
     speed,
     boostAmount,
     hasItem,
@@ -176,6 +211,10 @@ export function GameUI() {
             </div>
           </div>
 
+          <div className="mb-6">
+            <HighScorePanel />
+          </div>
+
           <button
             onClick={beginCountdown}
             className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-bold py-4 px-12 rounded-full text-xl transition-all transform hover:scale-105 shadow-lg"
@@ -211,6 +250,15 @@ export function GameUI() {
                 </span>
               </div>
             )}
+            {lastRaceRank && (
+              <div className="text-sm text-blue-300 mt-2">
+                Leaderboard position: #{lastRaceRank}
+              </div>
+            )}
+          </div>
+
+          <div className="mb-6">
+            <HighScorePanel />
           </div>
 
           <div className="flex gap-4 justify-center">
