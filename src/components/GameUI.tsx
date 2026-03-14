@@ -92,6 +92,7 @@ export function GameUI() {
     lap,
     totalLaps,
     currentLapTime,
+    totalRaceTime,
     bestLapTime,
     speed,
     boostAmount,
@@ -195,7 +196,7 @@ export function GameUI() {
             <div className="text-2xl text-white mb-2">
               Total Time:{" "}
               <span className="text-yellow-400 font-mono">
-                {formatTime(currentLapTime)}
+                {formatTime(totalRaceTime)}
               </span>
             </div>
             {bestLapTime && (
@@ -279,7 +280,10 @@ export function GameUI() {
             Time
           </div>
           <div className="text-white text-3xl font-mono font-bold">
-            {formatTime(currentLapTime)}
+            {formatTime(totalRaceTime)}
+          </div>
+          <div className="text-gray-400 text-xs font-mono mt-1">
+            Lap {formatTime(currentLapTime)}
           </div>
         </div>
 

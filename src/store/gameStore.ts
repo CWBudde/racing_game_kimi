@@ -16,6 +16,7 @@ export interface GameState {
   totalLaps: number;
   lapTimes: number[];
   currentLapTime: number;
+  totalRaceTime: number;
   bestLapTime: number | null;
   
   // Car stats
@@ -62,6 +63,7 @@ export const useGameStore = create<GameState>()(
     totalLaps: 3,
     lapTimes: [],
     currentLapTime: 0,
+    totalRaceTime: 0,
     bestLapTime: null,
     
     speed: 0,
@@ -82,6 +84,7 @@ export const useGameStore = create<GameState>()(
       lap: 1,
       lapTimes: [],
       currentLapTime: 0,
+      totalRaceTime: 0,
       speed: 0,
       boostAmount: 100,
       hasItem: false,
@@ -98,6 +101,7 @@ export const useGameStore = create<GameState>()(
       lap: 1,
       lapTimes: [],
       currentLapTime: 0,
+      totalRaceTime: 0,
       speed: 0,
       boostAmount: 100,
       hasItem: false,
@@ -118,6 +122,7 @@ export const useGameStore = create<GameState>()(
       lap: 1,
       lapTimes: [],
       currentLapTime: 0,
+      totalRaceTime: 0,
       bestLapTime: null,
       speed: 0,
       boostAmount: 100,
@@ -150,7 +155,10 @@ export const useGameStore = create<GameState>()(
     updateLapTime: (delta) => {
       const state = get();
       if (state.isPlaying && !state.isPaused) {
-        set({ currentLapTime: state.currentLapTime + delta });
+        set({
+          currentLapTime: state.currentLapTime + delta,
+          totalRaceTime: state.totalRaceTime + delta,
+        });
       }
     },
     
