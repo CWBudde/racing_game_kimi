@@ -1,5 +1,25 @@
 import * as THREE from "three";
 
+export interface TrackDefinition {
+  id: string;
+  name: string;
+  location: string;
+  difficulty: string;
+  laps: number;
+  description: string;
+}
+
+export const TRACKS: TrackDefinition[] = [
+  {
+    id: "coastal-gp",
+    name: "Coastal GP",
+    location: "Azure Ridge",
+    difficulty: "Intermediate",
+    laps: 3,
+    description: "Fast sweepers, one heavy hairpin, and a flowing final sector.",
+  },
+];
+
 // ── Racing circuit layout via control points ──
 // A proper GP-style circuit with varied corners: fast sweepers, a hairpin,
 // S-curves, and long straights.

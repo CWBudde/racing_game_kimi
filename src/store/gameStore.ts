@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
 import { getTrackStart } from '../components/trackData';
+import type { TrackDefinition } from '../components/trackData';
+import { TRACKS } from '../components/trackData';
 
 const trackStart = getTrackStart();
 const HIGHSCORE_STORAGE_KEY = 'kart-racing-highscores';
@@ -44,10 +46,12 @@ const saveHighScores = (entries: HighScoreEntry[]) => {
 
 export interface GameState {
   // Game status
+  showMainMenu: boolean;
   isPlaying: boolean;
   isPaused: boolean;
   gameOver: boolean;
   isCountingDown: boolean;
+  selectedCourseId: string;
   
   // Race stats
   lap: number;
@@ -71,6 +75,9 @@ export interface GameState {
   carRotation: [number, number, number];
   
   // Actions
+  openMainMenu: () => void;
+  openRaceSetup: () => void;
+  selectCourse: (courseId: string) => void;
   beginCountdown: () => void;
   startGame: () => void;
   pauseGame: () => void;
@@ -94,10 +101,12 @@ export interface GameState {
 export const useGameStore = create<GameState>()(
   subscribeWithSelector((set, get) => ({
     // Initial state
+    showMainMenu: true,
     isPlaying: false,
     isPaused: false,
     gameOver: false,
     isCountingDown: false,
+    selectedCourseId: TRACKS[0]?.id ?? 'default-track',
     
     lap: 1,
     totalLaps: 3,
@@ -118,7 +127,55 @@ export const useGameStore = create<GameState>()(
     carRotation: [0, trackStart.yaw, 0],
     
     // Game flow actions
+    openMainMenu: () => set({
+      showMainMenu: true,
+      isPlaying: false,
+      isPaused: false,
+      gameOver: false,
+      isCountingDown: false,
+      lap: 1,
+      lapTimes: [],
+      currentLapTime: 0,
+      totalRaceTime: 0,
+      bestLapTime: null,
+      lastRaceRank: null,
+      speed: 0,
+      boostAmount: 100,
+      hasItem: false,
+      currentItem: null,
+      carPosition: trackStart.position,
+      carRotation: [0, trackStart.yaw, 0],
+    }),
+    openRaceSetup: () => set({
+      showMainMenu: false,
+      isPlaying: false,
+      isPaused: false,
+      gameOver: false,
+      isCountingDown: false,
+      lap: 1,
+      lapTimes: [],
+      currentLapTime: 0,
+      totalRaceTime: 0,
+      bestLapTime: null,
+      lastRaceRank: null,
+      speed: 0,
+      boostAmount: 100,
+      hasItem: false,
+      currentItem: null,
+      carPosition: trackStart.position,
+      carRotation: [0, trackStart.yaw, 0],
+    }),
+    selectCourse: (courseId) => {
+      const track = TRACKS.find((entry) => entry.id === courseId);
+      if (!track) return;
+
+      set({
+        selectedCourseId: courseId,
+        totalLaps: track.laps,
+      });
+    },
     beginCountdown: () => set({
+      showMainMenu: false,
       isCountingDown: true,
       isPlaying: false,
       isPaused: false,
@@ -138,6 +195,7 @@ export const useGameStore = create<GameState>()(
     }),
 
     startGame: () => set({
+      showMainMenu: false,
       isPlaying: true,
       isCountingDown: false,
       isPaused: false,
@@ -161,6 +219,7 @@ export const useGameStore = create<GameState>()(
     endGame: () => set({ isPlaying: false, gameOver: true }),
     
     resetGame: () => set({
+      showMainMenu: true,
       isPlaying: false,
       isPaused: false,
       gameOver: false,
