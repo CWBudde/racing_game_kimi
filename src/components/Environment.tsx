@@ -152,6 +152,19 @@ function ItemBox({ position }: { position: [number, number, number] }) {
   );
 }
 
+// Minimum distance from track centerline before placing objects
+const TRACK_CLEARANCE = 18;
+
+function tooCloseToTrack(x: number, z: number): boolean {
+  const c2 = TRACK_CLEARANCE * TRACK_CLEARANCE;
+  for (const pt of TRACK_POINTS) {
+    const dx = pt.x - x;
+    const dz = pt.z - z;
+    if (dx * dx + dz * dz < c2) return true;
+  }
+  return false;
+}
+
 // Main Environment component
 export function Environment() {
   // Generate tree positions — two rings: near-track and far-field
@@ -160,11 +173,14 @@ export function Environment() {
       [];
 
     // Near-track trees (just outside the barriers)
-    for (let i = 0; i < 30; i++) {
-      const angle = (i / 30) * Math.PI * 2 + Math.random() * 0.4;
-      const radius = 100 + Math.random() * 40;
+    for (let i = 0; i < 60; i++) {
+      const angle = (i / 60) * Math.PI * 2 + Math.random() * 0.4;
+      const radius = 80 + Math.random() * 60;
+      const x = Math.cos(angle) * radius;
+      const z = Math.sin(angle) * radius;
+      if (tooCloseToTrack(x, z)) continue;
       positions.push({
-        position: [Math.cos(angle) * radius, 0, Math.sin(angle) * radius],
+        position: [x, 0, z],
         scale: 0.8 + Math.random() * 0.6,
       });
     }
@@ -173,8 +189,10 @@ export function Environment() {
     for (let i = 0; i < 40; i++) {
       const angle = (i / 40) * Math.PI * 2 + Math.random() * 0.6;
       const radius = 160 + Math.random() * 200;
+      const x = Math.cos(angle) * radius;
+      const z = Math.sin(angle) * radius;
       positions.push({
-        position: [Math.cos(angle) * radius, 0, Math.sin(angle) * radius],
+        position: [x, 0, z],
         scale: 1 + Math.random() * 1.0,
       });
     }
@@ -186,11 +204,14 @@ export function Environment() {
   const rocks = useMemo(() => {
     const positions: { position: [number, number, number]; scale: number }[] =
       [];
-    for (let i = 0; i < 25; i++) {
-      const angle = (i / 25) * Math.PI * 2 + Math.random() * 0.8;
-      const radius = 90 + Math.random() * 180;
+    for (let i = 0; i < 50; i++) {
+      const angle = (i / 50) * Math.PI * 2 + Math.random() * 0.8;
+      const radius = 70 + Math.random() * 180;
+      const x = Math.cos(angle) * radius;
+      const z = Math.sin(angle) * radius;
+      if (tooCloseToTrack(x, z)) continue;
       positions.push({
-        position: [Math.cos(angle) * radius, 0.5, Math.sin(angle) * radius],
+        position: [x, 0.5, z],
         scale: 0.5 + Math.random() * 1.2,
       });
     }
