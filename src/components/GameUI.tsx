@@ -1,6 +1,80 @@
 import { useEffect, useState, useRef } from "react";
 import { useGameStore } from "../store/gameStore";
 
+// ── Traffic-light countdown overlay ──────────────────────────────────────────
+// phases: 0 = "3" red | 1 = "2" red+yellow | 2 = "1" yellow | 3 = "GO" green
+function CountdownOverlay() {
+  const startGame = useGameStore((s) => s.startGame);
+  const [phase, setPhase] = useState(0);
+
+  useEffect(() => {
+    const timings = [1000, 1000, 1000, 700]; // ms per phase
+    let current = 0;
+
+    const tick = () => {
+      current++;
+      if (current < 4) {
+        setPhase(current);
+        setTimeout(tick, timings[current]);
+      } else {
+        startGame();
+      }
+    };
+
+    const id = setTimeout(tick, timings[0]);
+    return () => clearTimeout(id);
+  }, [startGame]);
+
+  const redOn    = phase === 0 || phase === 1;
+  const yellowOn = phase === 1 || phase === 2;
+  const greenOn  = phase === 3;
+
+  const label   = phase === 3 ? "GO!" : String(3 - phase);
+  const labelColor = phase === 3 ? "#22c55e" : phase === 2 ? "#eab308" : "#ef4444";
+
+  return (
+    <div className="absolute inset-0 flex items-center justify-center z-50 pointer-events-none">
+      <div className="flex flex-col items-center gap-6">
+        {/* Traffic light housing */}
+        <div className="bg-gray-900 border-4 border-gray-700 rounded-2xl p-5 flex flex-col gap-4 shadow-2xl">
+          {/* Red */}
+          <div
+            className="w-20 h-20 rounded-full border-4 border-gray-700 transition-all duration-150"
+            style={{
+              background: redOn ? "#ef4444" : "#3f0a0a",
+              boxShadow: redOn ? "0 0 32px 8px #ef444488" : "none",
+            }}
+          />
+          {/* Yellow */}
+          <div
+            className="w-20 h-20 rounded-full border-4 border-gray-700 transition-all duration-150"
+            style={{
+              background: yellowOn ? "#eab308" : "#3b2a00",
+              boxShadow: yellowOn ? "0 0 32px 8px #eab30888" : "none",
+            }}
+          />
+          {/* Green */}
+          <div
+            className="w-20 h-20 rounded-full border-4 border-gray-700 transition-all duration-150"
+            style={{
+              background: greenOn ? "#22c55e" : "#052010",
+              boxShadow: greenOn ? "0 0 32px 8px #22c55e88" : "none",
+            }}
+          />
+        </div>
+
+        {/* Big number / GO */}
+        <div
+          className="text-8xl font-black drop-shadow-lg transition-all duration-150"
+          style={{ color: labelColor, textShadow: `0 0 40px ${labelColor}` }}
+        >
+          {label}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // Format time as MM:SS.ms
 const formatTime = (seconds: number): string => {
   const mins = Math.floor(seconds / 60);
@@ -14,6 +88,7 @@ export function GameUI() {
     isPlaying,
     isPaused,
     gameOver,
+    isCountingDown,
     lap,
     totalLaps,
     currentLapTime,
@@ -21,7 +96,7 @@ export function GameUI() {
     speed,
     boostAmount,
     hasItem,
-    startGame,
+    beginCountdown,
     pauseGame,
     resumeGame,
     resetGame,
@@ -52,8 +127,8 @@ export function GameUI() {
     }
   }, [isPlaying]);
 
-  // Start screen
-  if (!isPlaying && !gameOver) {
+  // Start screen (also shown while counting down so the 3D scene is visible behind)
+  if (!isPlaying && !isCountingDown && !gameOver) {
     return (
       <div className="absolute inset-0 flex items-center justify-center bg-black/70 z-50">
         <div className="bg-gradient-to-br from-blue-900 to-purple-900 p-8 rounded-2xl shadow-2xl text-center max-w-md border-4 border-yellow-400">
@@ -97,7 +172,7 @@ export function GameUI() {
           </div>
 
           <button
-            onClick={startGame}
+            onClick={beginCountdown}
             className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-bold py-4 px-12 rounded-full text-xl transition-all transform hover:scale-105 shadow-lg"
           >
             START RACE
@@ -141,7 +216,7 @@ export function GameUI() {
               Main Menu
             </button>
             <button
-              onClick={startGame}
+              onClick={beginCountdown}
               className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-bold py-3 px-8 rounded-full transition-all"
             >
               Race Again
@@ -175,6 +250,11 @@ export function GameUI() {
         </div>
       </div>
     );
+  }
+
+  // Countdown screen — no menus, just the traffic light over the 3D world
+  if (isCountingDown) {
+    return <CountdownOverlay />;
   }
 
   // Main HUD

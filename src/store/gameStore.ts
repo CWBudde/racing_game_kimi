@@ -9,6 +9,7 @@ export interface GameState {
   isPlaying: boolean;
   isPaused: boolean;
   gameOver: boolean;
+  isCountingDown: boolean;
   
   // Race stats
   lap: number;
@@ -29,6 +30,7 @@ export interface GameState {
   carRotation: [number, number, number];
   
   // Actions
+  beginCountdown: () => void;
   startGame: () => void;
   pauseGame: () => void;
   resumeGame: () => void;
@@ -54,6 +56,7 @@ export const useGameStore = create<GameState>()(
     isPlaying: false,
     isPaused: false,
     gameOver: false,
+    isCountingDown: false,
     
     lap: 1,
     totalLaps: 3,
@@ -71,9 +74,26 @@ export const useGameStore = create<GameState>()(
     carRotation: [0, trackStart.yaw, 0],
     
     // Game flow actions
-    startGame: () => set({ 
-      isPlaying: true, 
-      isPaused: false, 
+    beginCountdown: () => set({
+      isCountingDown: true,
+      isPlaying: false,
+      isPaused: false,
+      gameOver: false,
+      lap: 1,
+      lapTimes: [],
+      currentLapTime: 0,
+      speed: 0,
+      boostAmount: 100,
+      hasItem: false,
+      currentItem: null,
+      carPosition: trackStart.position,
+      carRotation: [0, trackStart.yaw, 0],
+    }),
+
+    startGame: () => set({
+      isPlaying: true,
+      isCountingDown: false,
+      isPaused: false,
       gameOver: false,
       lap: 1,
       lapTimes: [],
@@ -94,6 +114,7 @@ export const useGameStore = create<GameState>()(
       isPlaying: false,
       isPaused: false,
       gameOver: false,
+      isCountingDown: false,
       lap: 1,
       lapTimes: [],
       currentLapTime: 0,
