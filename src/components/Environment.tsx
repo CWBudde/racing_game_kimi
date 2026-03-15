@@ -1,9 +1,9 @@
-import { useRef, useMemo } from "react";
+import { useRef, useMemo, useState, useCallback } from "react";
 import { useFrame } from "@react-three/fiber";
 import { RigidBody, CuboidCollider } from "@react-three/rapier";
 import * as THREE from "three";
 import { getTrackLayout, TRACK_WIDTH } from "./trackData";
-import { useGameStore } from "../store/gameStore";
+import { useGameStore, ITEM_POOLS, type ItemType } from "../store/gameStore";
 
 // Tree component
 function Tree({
@@ -104,11 +104,42 @@ function Cloud({
   );
 }
 
-// Item Box component
-function ItemBox({ position }: { position: [number, number, number] }) {
-  const boxRef = useRef<THREE.Mesh>(null);
+// Item Box component — collectible with respawn
+const RESPAWN_TIME = 5; // seconds before item box reappears
 
-  useFrame(({ clock }) => {
+function ItemBox({
+  position,
+  itemPool,
+}: {
+  position: [number, number, number];
+  itemPool: ItemType[];
+}) {
+  const boxRef = useRef<THREE.Mesh>(null);
+  const [collected, setCollected] = useState(false);
+  const respawnTimerRef = useRef(0);
+  const collectItem = useGameStore((s) => s.collectItem);
+  const hasItem = useGameStore((s) => s.hasItem);
+
+  const handleIntersection = useCallback(
+    () => {
+      if (collected || hasItem) return;
+      const item = itemPool[Math.floor(Math.random() * itemPool.length)];
+      collectItem(item);
+      setCollected(true);
+      respawnTimerRef.current = RESPAWN_TIME;
+    },
+    [collected, hasItem, itemPool, collectItem],
+  );
+
+  useFrame(({ clock }, delta) => {
+    if (collected) {
+      respawnTimerRef.current -= delta;
+      if (respawnTimerRef.current <= 0) {
+        setCollected(false);
+      }
+      return;
+    }
+
     if (boxRef.current) {
       boxRef.current.rotation.y = clock.getElapsedTime() * 2;
       boxRef.current.position.y =
@@ -116,8 +147,15 @@ function ItemBox({ position }: { position: [number, number, number] }) {
     }
   });
 
+  if (collected) return null;
+
   return (
-    <RigidBody type="fixed" position={position} sensor>
+    <RigidBody
+      type="fixed"
+      position={position}
+      sensor
+      onIntersectionEnter={handleIntersection}
+    >
       <mesh ref={boxRef} castShadow>
         <boxGeometry args={[1.5, 1.5, 1.5]} />
         <meshStandardMaterial
@@ -281,7 +319,11 @@ export function Environment() {
 
       {/* Item Boxes */}
       {itemBoxes.map((pos, i) => (
-        <ItemBox key={`item-${i}`} position={pos} />
+        <ItemBox
+          key={`item-${i}`}
+          position={pos}
+          itemPool={ITEM_POOLS[selectedCourseId] ?? ITEM_POOLS['coastal-gp']}
+        />
       ))}
 
       {/* Mountains in background — pushed much further out */}

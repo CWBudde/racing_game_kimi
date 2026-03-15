@@ -13,6 +13,7 @@ export const keys = {
   d: false,
   space: false,
   shift: false,
+  e: false,
 };
 
 type ControlState = {
@@ -21,6 +22,7 @@ type ControlState = {
   steer: number;
   handbrake: boolean;
   boost: boolean;
+  useItemBtn: boolean;
 };
 
 const GAMEPAD_DEADZONE = 0.18;
@@ -42,6 +44,7 @@ const readGamepadInput = (): ControlState => {
       steer: 0,
       handbrake: false,
       boost: false,
+      useItemBtn: false,
     };
   }
 
@@ -59,6 +62,7 @@ const readGamepadInput = (): ControlState => {
       steer: clamp(steer, -1, 1),
       handbrake: !!pad.buttons[0]?.pressed,
       boost: !!pad.buttons[5]?.pressed,
+      useItemBtn: !!pad.buttons[3]?.pressed, // Y button
     };
   }
 
@@ -68,6 +72,7 @@ const readGamepadInput = (): ControlState => {
     steer: 0,
     handbrake: false,
     boost: false,
+    useItemBtn: false,
   };
 };
 
@@ -82,6 +87,7 @@ function useKeyboardInput() {
       if (key === "d" || key === "arrowright") keys.d = true;
       if (key === " ") keys.space = true;
       if (key === "shift") keys.shift = true;
+      if (key === "e") keys.e = true;
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
@@ -92,6 +98,7 @@ function useKeyboardInput() {
       if (key === "d" || key === "arrowright") keys.d = false;
       if (key === " ") keys.space = false;
       if (key === "shift") keys.shift = false;
+      if (key === "e") keys.e = false;
     };
 
     window.addEventListener("keydown", handleKeyDown);
@@ -145,11 +152,16 @@ export function useCarPhysics() {
     boostAmount,
     updateBoost,
     completeLap,
+    activeEffect,
+    updateActiveEffect,
   } = useGameStore();
+
+  const triggerItem = useGameStore((s) => s.useItem);
 
   // Lap detection state
   const trackProgressRef = useRef(0);
   const hasPassedMidRef = useRef(false);
+  const useItemPressedRef = useRef(false);
 
   const [localSpeed, setLocalSpeed] = useState(0);
   const trackPoints = getTrackLayout(selectedCourseId).points;
@@ -185,6 +197,24 @@ export function useCarPhysics() {
     const brakeInput = Math.max(keys.s ? 1 : 0, gamepadInput.brake);
     const handbrakeActive = keys.space || gamepadInput.handbrake;
     const boostActive = keys.shift || gamepadInput.boost;
+    const useItemPressed = keys.e || gamepadInput.useItemBtn;
+
+    // --- Use item on key press (edge-detect via ref) ---
+    if (useItemPressed && !useItemPressedRef.current) {
+      triggerItem();
+    }
+    useItemPressedRef.current = useItemPressed;
+
+    // --- Tick active effect timer ---
+    if (activeEffect) {
+      updateActiveEffect(dt);
+    }
+
+    // --- Compute effect modifiers ---
+    const hasSpeedStar = activeEffect?.type === 'speed-star';
+    const hasGripBoost = activeEffect?.type === 'grip-boost';
+    const hasTurbo = activeEffect?.type === 'turbo';
+    const effectiveMaxSpeed = hasSpeedStar ? MAX_SPEED * 1.5 : MAX_SPEED;
 
     // --- Steering input (smooth, frame-rate independent) ---
     const targetSteering = steeringInput * MAX_STEERING_ANGLE;
@@ -202,7 +232,7 @@ export function useCarPhysics() {
       if (boostActive && boostAmount > 0) {
         updateBoost(Math.max(boostAmount - dt * 20, 0));
       }
-      if (forwardSpeed < MAX_SPEED * boost) {
+      if (forwardSpeed < effectiveMaxSpeed * boost) {
         acceleration = ACCELERATION * boost * throttleInput;
       }
     } else if (brakeInput > 0) {
@@ -234,6 +264,15 @@ export function useCarPhysics() {
       );
     }
 
+    // Turbo: massive forward impulse while active
+    if (hasTurbo) {
+      const turboForce = ACCELERATION * 4 * dt * CAR_MASS;
+      car.applyImpulse(
+        { x: forward.x * turboForce, y: 0, z: forward.z * turboForce },
+        true,
+      );
+    }
+
     // --- Steering via angular velocity (lets Rapier handle collision response) ---
     if (
       Math.abs(currentSteering) > 0.01 &&
@@ -258,7 +297,8 @@ export function useCarPhysics() {
     // --- Lateral grip: gently redirect velocity toward forward direction ---
     // Instead of hard-setting linvel, apply a corrective impulse
     if (Math.abs(lateralSpeed) > 0.2) {
-      const gripStrength = handbrakeActive ? 0.4 : 0.85; // handbrake reduces grip
+      const baseGrip = hasGripBoost ? 0.95 : 0.85;
+      const gripStrength = handbrakeActive ? 0.4 : baseGrip;
       // Apply a lateral impulse opposing the slide
       const correctionForce = -lateralSpeed * gripStrength * CAR_MASS * dt;
       car.applyImpulse(
