@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from "react";
 import { TRACKS } from "./trackData";
-import { useGameStore } from "../store/gameStore";
+import { useGameStore, ITEM_INFO } from "../store/gameStore";
 
 // ── Traffic-light countdown overlay ──────────────────────────────────────────
 // phases: 0 = "3" red | 1 = "2" red+yellow | 2 = "1" yellow | 3 = "GO" green
@@ -135,6 +135,8 @@ export function GameUI() {
     speed,
     boostAmount,
     hasItem,
+    currentItem,
+    activeEffect,
     openMainMenu,
     openRaceSetup,
     selectCourse,
@@ -288,6 +290,10 @@ export function GameUI() {
               <div>
                 <span className="bg-gray-700 px-2 py-1 rounded">SHIFT</span>{" "}
                 Boost
+              </div>
+              <div>
+                <span className="bg-gray-700 px-2 py-1 rounded">E</span>{" "}
+                Use Item
               </div>
             </div>
             <div className="mt-3 text-sm text-gray-200">
@@ -483,15 +489,28 @@ export function GameUI() {
         {/* Item Box */}
         <div className="bg-black/60 backdrop-blur-sm rounded-xl p-4 border-2 border-yellow-400">
           <div className="text-yellow-400 text-sm font-bold uppercase tracking-wider mb-1">
-            Item
+            Item <span className="text-xs text-gray-400 font-normal normal-case">[E]</span>
           </div>
-          {hasItem ? (
-            <div className="w-16 h-16 bg-yellow-400 rounded-lg flex items-center justify-center">
-              <span className="text-3xl">❓</span>
+          {hasItem && currentItem ? (
+            <div className="w-16 h-16 bg-yellow-400 rounded-lg flex flex-col items-center justify-center">
+              <span className="text-2xl">{ITEM_INFO[currentItem].emoji}</span>
+              <span className="text-[9px] font-bold text-black leading-tight">
+                {ITEM_INFO[currentItem].name}
+              </span>
             </div>
           ) : (
             <div className="w-16 h-16 bg-gray-700 rounded-lg flex items-center justify-center border-2 border-dashed border-gray-500">
               <span className="text-gray-500 text-xs">Empty</span>
+            </div>
+          )}
+          {activeEffect && (
+            <div className="mt-2 text-center">
+              <div className="text-xs text-green-400 font-bold animate-pulse">
+                {ITEM_INFO[activeEffect.type].emoji} {ITEM_INFO[activeEffect.type].name}
+              </div>
+              <div className="text-[10px] text-gray-300">
+                {activeEffect.remaining.toFixed(1)}s
+              </div>
             </div>
           )}
         </div>
@@ -512,6 +531,10 @@ export function GameUI() {
             <div className="flex items-center gap-2">
               <span className="bg-gray-700 px-2 py-1 rounded">SHIFT</span>
               <span>Boost</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="bg-gray-700 px-2 py-1 rounded">E</span>
+              <span>Item</span>
             </div>
             <div className="flex items-center gap-2">
               <span className="bg-gray-700 px-2 py-1 rounded">ESC</span>

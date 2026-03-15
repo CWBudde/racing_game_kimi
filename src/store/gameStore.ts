@@ -43,6 +43,31 @@ const saveHighScores = (entries: HighScoreEntry[]) => {
   window.localStorage.setItem(HIGHSCORE_STORAGE_KEY, JSON.stringify(entries));
 };
 
+export type ItemType =
+  | 'boost-refill'   // Coastal: instantly refills boost meter
+  | 'speed-star'     // Coastal: 1.5x max speed for 5s
+  | 'time-bonus'     // Both: shaves 2s off current lap time
+  | 'grip-boost'     // Desert: better handling for 5s
+  | 'turbo';         // Desert: instant massive speed burst
+
+export interface ActiveEffect {
+  type: ItemType;
+  remaining: number; // seconds left (0 for instant effects)
+}
+
+export const ITEM_POOLS: Record<string, ItemType[]> = {
+  'coastal-gp': ['boost-refill', 'speed-star', 'time-bonus'],
+  'desert-run': ['turbo', 'grip-boost', 'time-bonus'],
+};
+
+export const ITEM_INFO: Record<ItemType, { name: string; emoji: string; duration: number }> = {
+  'boost-refill': { name: 'Boost Refill', emoji: '⚡', duration: 0 },
+  'speed-star':   { name: 'Speed Star',   emoji: '⭐', duration: 5 },
+  'time-bonus':   { name: 'Time Bonus',   emoji: '⏱️', duration: 0 },
+  'grip-boost':   { name: 'Grip Boost',   emoji: '🧲', duration: 5 },
+  'turbo':        { name: 'Turbo',         emoji: '🔥', duration: 0 },
+};
+
 export interface GameState {
   // Game status
   showMainMenu: boolean;
@@ -51,7 +76,7 @@ export interface GameState {
   gameOver: boolean;
   isCountingDown: boolean;
   selectedCourseId: string;
-  
+
   // Race stats
   lap: number;
   totalLaps: number;
@@ -61,18 +86,19 @@ export interface GameState {
   bestLapTime: number | null;
   highScores: HighScoreEntry[];
   lastRaceRank: number | null;
-  
+
   // Car stats
   speed: number;
   maxSpeed: number;
   boostAmount: number;
   hasItem: boolean;
-  currentItem: string | null;
-  
+  currentItem: ItemType | null;
+  activeEffect: ActiveEffect | null;
+
   // Position
   carPosition: [number, number, number];
   carRotation: [number, number, number];
-  
+
   // Actions
   openMainMenu: () => void;
   openRaceSetup: () => void;
@@ -83,16 +109,17 @@ export interface GameState {
   resumeGame: () => void;
   endGame: () => void;
   resetGame: () => void;
-  
+
   // Lap actions
   completeLap: () => void;
   updateLapTime: (delta: number) => void;
-  
+
   // Car actions
   updateSpeed: (speed: number) => void;
   updateBoost: (amount: number) => void;
   useItem: () => void;
-  collectItem: (item: string) => void;
+  collectItem: (item: ItemType) => void;
+  updateActiveEffect: (delta: number) => void;
   updateCarPosition: (position: [number, number, number]) => void;
   updateCarRotation: (rotation: [number, number, number]) => void;
 }
@@ -121,7 +148,8 @@ export const useGameStore = create<GameState>()(
     boostAmount: 100,
     hasItem: false,
     currentItem: null,
-    
+    activeEffect: null,
+
     carPosition: initialTrackStart.position,
     carRotation: [0, initialTrackStart.yaw, 0],
     
@@ -144,6 +172,7 @@ export const useGameStore = create<GameState>()(
         boostAmount: 100,
         hasItem: false,
         currentItem: null,
+        activeEffect: null,
         carPosition: trackStart.position,
         carRotation: [0, trackStart.yaw, 0],
       };
@@ -166,6 +195,7 @@ export const useGameStore = create<GameState>()(
         boostAmount: 100,
         hasItem: false,
         currentItem: null,
+        activeEffect: null,
         carPosition: trackStart.position,
         carRotation: [0, trackStart.yaw, 0],
       };
@@ -200,6 +230,7 @@ export const useGameStore = create<GameState>()(
         boostAmount: 100,
         hasItem: false,
         currentItem: null,
+        activeEffect: null,
         carPosition: trackStart.position,
         carRotation: [0, trackStart.yaw, 0],
       };
@@ -223,6 +254,7 @@ export const useGameStore = create<GameState>()(
         boostAmount: 100,
         hasItem: false,
         currentItem: null,
+        activeEffect: null,
         carPosition: trackStart.position,
         carRotation: [0, trackStart.yaw, 0]
       };
@@ -250,6 +282,7 @@ export const useGameStore = create<GameState>()(
         boostAmount: 100,
         hasItem: false,
         currentItem: null,
+        activeEffect: null,
         carPosition: trackStart.position,
         carRotation: [0, trackStart.yaw, 0]
       };
@@ -309,12 +342,53 @@ export const useGameStore = create<GameState>()(
     updateBoost: (amount) => set({ boostAmount: Math.max(0, Math.min(100, amount)) }),
     
     collectItem: (item) => set({ hasItem: true, currentItem: item }),
-    
+
     useItem: () => {
       const state = get();
-      if (state.hasItem && state.currentItem) {
-        // Apply item effect based on type
-        set({ hasItem: false, currentItem: null });
+      if (!state.hasItem || !state.currentItem) return;
+
+      const item = state.currentItem;
+      const info = ITEM_INFO[item];
+
+      switch (item) {
+        case 'boost-refill':
+          set({ boostAmount: 100, hasItem: false, currentItem: null });
+          break;
+        case 'time-bonus':
+          set({
+            currentLapTime: Math.max(0, state.currentLapTime - 2),
+            totalRaceTime: Math.max(0, state.totalRaceTime - 2),
+            hasItem: false,
+            currentItem: null,
+          });
+          break;
+        case 'turbo':
+          // Turbo is an instant burst — applied in carPhysics via activeEffect
+          set({
+            activeEffect: { type: 'turbo', remaining: 0.8 },
+            hasItem: false,
+            currentItem: null,
+          });
+          break;
+        case 'speed-star':
+        case 'grip-boost':
+          set({
+            activeEffect: { type: item, remaining: info.duration },
+            hasItem: false,
+            currentItem: null,
+          });
+          break;
+      }
+    },
+
+    updateActiveEffect: (delta) => {
+      const state = get();
+      if (!state.activeEffect) return;
+      const remaining = state.activeEffect.remaining - delta;
+      if (remaining <= 0) {
+        set({ activeEffect: null });
+      } else {
+        set({ activeEffect: { ...state.activeEffect, remaining } });
       }
     },
     
