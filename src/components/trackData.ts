@@ -1,50 +1,35 @@
 import * as THREE from "three";
 
-// ── Racing circuit layout via control points ──
-// A proper GP-style circuit with varied corners: fast sweepers, a hairpin,
-// S-curves, and long straights.
+// A new "neon district" circuit with long straights, a top-end hairpin,
+// and a tighter south-side tech section for a cyber-city feel.
 const CONTROL_POINTS = [
-  // Main straight (car starts here, heading +Z)
-  new THREE.Vector3(-50, 0, -55),
-  new THREE.Vector3(-50, 0, 25),
-  // Turn 1 — fast right sweeper
-  new THREE.Vector3(-42, 0, 65),
-  new THREE.Vector3(-10, 0, 100),
-  new THREE.Vector3(30, 0, 108),
-  // Turn 2 — medium right
-  new THREE.Vector3(65, 0, 92),
-  new THREE.Vector3(85, 0, 60),
-  // Short straight into hairpin
-  new THREE.Vector3(88, 0, 28),
-  // Turn 3 — hairpin right
-  new THREE.Vector3(85, 0, -2),
-  new THREE.Vector3(108, 0, -25),
-  new THREE.Vector3(85, 0, -48),
-  // S-curves
-  new THREE.Vector3(58, 0, -58),
-  new THREE.Vector3(32, 0, -42),
-  new THREE.Vector3(18, 0, -68),
-  // Turn 6 — long left sweeper toward finish
-  new THREE.Vector3(-8, 0, -90),
-  new THREE.Vector3(-38, 0, -102),
-  // Final section back to start
-  new THREE.Vector3(-60, 0, -92),
-  new THREE.Vector3(-70, 0, -72),
+  new THREE.Vector3(-22, 0, -128),
+  new THREE.Vector3(-20, 0, -72),
+  new THREE.Vector3(-30, 0, -20),
+  new THREE.Vector3(-68, 0, 30),
+  new THREE.Vector3(-112, 0, 74),
+  new THREE.Vector3(-76, 0, 114),
+  new THREE.Vector3(-18, 0, 128),
+  new THREE.Vector3(46, 0, 120),
+  new THREE.Vector3(98, 0, 88),
+  new THREE.Vector3(118, 0, 34),
+  new THREE.Vector3(108, 0, -14),
+  new THREE.Vector3(78, 0, -54),
+  new THREE.Vector3(32, 0, -66),
+  new THREE.Vector3(60, 0, -96),
+  new THREE.Vector3(84, 0, -132),
+  new THREE.Vector3(40, 0, -154),
+  new THREE.Vector3(-14, 0, -158),
+  new THREE.Vector3(-54, 0, -146),
 ];
 
-export const TRACK_WIDTH = 20;
-const TRACK_SEGMENTS = 200;
+export const TRACK_WIDTH = 22;
+const TRACK_SEGMENTS = 240;
 
-// Smooth closed spline through control points (centripetal avoids cusps)
-const trackCurve = new THREE.CatmullRomCurve3(
-  CONTROL_POINTS,
-  true, // closed
-  "centripetal",
-);
+const trackCurve = new THREE.CatmullRomCurve3(CONTROL_POINTS, true, "centripetal");
 
 const generateTrackPoints = (): THREE.Vector3[] => {
   const pts = trackCurve.getSpacedPoints(TRACK_SEGMENTS);
-  // getSpacedPoints returns N+1 points for a closed curve; drop the duplicate
   return pts.slice(0, -1);
 };
 
@@ -72,13 +57,9 @@ const generateTrackWidth = (
   return { left, right };
 };
 
-// Pre-compute so other modules can use them
 export const TRACK_POINTS = generateTrackPoints();
 export const TRACK_SIDES = generateTrackWidth(TRACK_POINTS, TRACK_WIDTH);
 
-// ── Barrier segment generation along a polyline at fixed arc-length intervals ──
-// Samples a closed polyline at every `spacing` world units and returns
-// {position, angle, length} for each barrier panel — independently for each side.
 export interface BarrierSegment {
   position: THREE.Vector3;
   angle: number;
@@ -92,27 +73,23 @@ export function generateBarrierSegments(
   const segments: BarrierSegment[] = [];
   const n = polyline.length;
 
-  // Build cumulative arc-length table
   const arcLen: number[] = [0];
   for (let i = 0; i < n; i++) {
     const ni = (i + 1) % n;
     arcLen.push(arcLen[i] + polyline[i].distanceTo(polyline[ni]));
   }
-  const totalLen = arcLen[n]; // arc-length of full closed loop
+  const totalLen = arcLen[n];
 
-  // Sample at fixed intervals
   let sampleDist = 0;
   let segIdx = 0;
 
   while (sampleDist < totalLen) {
     const nextDist = Math.min(sampleDist + spacing, totalLen);
 
-    // Find polyline point at sampleDist
     while (segIdx < n - 1 && arcLen[segIdx + 1] < sampleDist) segIdx++;
     const t0 = (sampleDist - arcLen[segIdx]) / (arcLen[segIdx + 1] - arcLen[segIdx]);
     const p0 = new THREE.Vector3().lerpVectors(polyline[segIdx], polyline[(segIdx + 1) % n], t0);
 
-    // Find polyline point at nextDist
     let endIdx = segIdx;
     while (endIdx < n - 1 && arcLen[endIdx + 1] < nextDist) endIdx++;
     const t1 = (nextDist - arcLen[endIdx]) / (arcLen[endIdx + 1] - arcLen[endIdx]);
@@ -133,46 +110,100 @@ export function generateBarrierSegments(
   return segments;
 }
 
-// ── Car spawn helper ──
 export function getTrackStart(): {
   position: [number, number, number];
   yaw: number;
 } {
   const p0 = TRACK_POINTS[0];
-  const p3 = TRACK_POINTS[3]; // look a few points ahead for a stable heading
+  const p3 = TRACK_POINTS[3];
   const yaw = Math.atan2(p3.x - p0.x, p3.z - p0.z);
   return { position: [p0.x, p0.y + 2, p0.z], yaw };
 }
 
-// ── Road surface texture with lane markings ──
 export const createRoadTexture = (): HTMLCanvasElement => {
   const canvas = document.createElement("canvas");
-  canvas.width = 256;
-  canvas.height = 256;
+  canvas.width = 512;
+  canvas.height = 512;
   const ctx = canvas.getContext("2d")!;
 
-  // Asphalt base
-  ctx.fillStyle = "#3a3a3a";
-  ctx.fillRect(0, 0, 256, 256);
+  const gradient = ctx.createLinearGradient(0, 0, 512, 512);
+  gradient.addColorStop(0, "#05060d");
+  gradient.addColorStop(0.5, "#0c1224");
+  gradient.addColorStop(1, "#080b16");
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, 512, 512);
 
-  // Fine grain noise for realism
-  for (let i = 0; i < 2000; i++) {
-    const x = Math.random() * 256;
-    const y = Math.random() * 256;
-    const b = 45 + Math.random() * 25;
-    ctx.fillStyle = `rgb(${b},${b},${b})`;
-    ctx.fillRect(x, y, 2, 2);
+  for (let i = 0; i < 2600; i++) {
+    const x = Math.random() * 512;
+    const y = Math.random() * 512;
+    const alpha = 0.08 + Math.random() * 0.12;
+    const size = 1 + Math.random() * 2;
+    ctx.fillStyle = `rgba(110, 180, 255, ${alpha})`;
+    ctx.fillRect(x, y, size, size);
   }
 
-  // White edge lines
-  ctx.fillStyle = "#dddddd";
-  ctx.fillRect(0, 0, 8, 256); // left edge
-  ctx.fillRect(248, 0, 8, 256); // right edge
+  ctx.strokeStyle = "rgba(40, 120, 255, 0.18)";
+  ctx.lineWidth = 1;
+  for (let y = 0; y <= 512; y += 32) {
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(512, y);
+    ctx.stroke();
+  }
 
-  // Dashed center line
-  ctx.fillStyle = "#cccccc";
-  for (let y = 0; y < 256; y += 48) {
-    ctx.fillRect(124, y, 8, 28);
+  ctx.fillStyle = "#1de7ff";
+  ctx.fillRect(0, 0, 14, 512);
+  ctx.fillRect(498, 0, 14, 512);
+
+  ctx.fillStyle = "#ff3ccf";
+  for (let y = 0; y < 512; y += 56) {
+    ctx.fillRect(246, y, 20, 34);
+  }
+
+  ctx.fillStyle = "rgba(255, 255, 255, 0.2)";
+  for (let y = 16; y < 512; y += 64) {
+    ctx.fillRect(80, y, 352, 2);
+  }
+
+  return canvas;
+};
+
+export const createGroundTexture = (): HTMLCanvasElement => {
+  const canvas = document.createElement("canvas");
+  canvas.width = 512;
+  canvas.height = 512;
+  const ctx = canvas.getContext("2d")!;
+
+  const gradient = ctx.createRadialGradient(256, 256, 30, 256, 256, 360);
+  gradient.addColorStop(0, "#0c1530");
+  gradient.addColorStop(0.45, "#08101f");
+  gradient.addColorStop(1, "#03050b");
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, 512, 512);
+
+  ctx.strokeStyle = "rgba(0, 255, 240, 0.16)";
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= 512; i += 32) {
+    ctx.beginPath();
+    ctx.moveTo(i, 0);
+    ctx.lineTo(i, 512);
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(0, i);
+    ctx.lineTo(512, i);
+    ctx.stroke();
+  }
+
+  for (let i = 0; i < 120; i++) {
+    const x = Math.random() * 512;
+    const y = Math.random() * 512;
+    const r = 2 + Math.random() * 3;
+    const glow = ctx.createRadialGradient(x, y, 0, x, y, r * 3);
+    glow.addColorStop(0, "rgba(255, 60, 207, 0.7)");
+    glow.addColorStop(1, "rgba(255, 60, 207, 0)");
+    ctx.fillStyle = glow;
+    ctx.fillRect(x - r * 3, y - r * 3, r * 6, r * 6);
   }
 
   return canvas;

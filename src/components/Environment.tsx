@@ -1,304 +1,448 @@
-import { useRef, useMemo } from "react";
+import { useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
-import { RigidBody, CuboidCollider } from "@react-three/rapier";
+import { RigidBody } from "@react-three/rapier";
 import * as THREE from "three";
-import { TRACK_POINTS } from "./trackData";
+import { TRACK_POINTS, TRACK_SIDES } from "./trackData";
 
-// Tree component
-function Tree({
+function NeonTower({
   position,
-  scale = 1,
+  width,
+  height,
+  depth,
+  accent,
 }: {
   position: [number, number, number];
-  scale?: number;
+  width: number;
+  height: number;
+  depth: number;
+  accent: string;
 }) {
   return (
     <RigidBody type="fixed" position={position} colliders={false}>
-      {/* Trunk */}
-      <mesh castShadow position={[0, 1.5 * scale, 0]}>
-        <cylinderGeometry args={[0.3 * scale, 0.4 * scale, 3 * scale, 8]} />
-        <meshStandardMaterial color="#8B4513" />
+      <mesh castShadow position={[0, height / 2, 0]}>
+        <boxGeometry args={[width, height, depth]} />
+        <meshStandardMaterial
+          color="#09111f"
+          emissive={accent}
+          emissiveIntensity={0.24}
+          metalness={0.8}
+          roughness={0.35}
+        />
       </mesh>
-      <CuboidCollider
-        args={[0.3 * scale, 1.5 * scale, 0.3 * scale]}
-        position={[0, 1.5 * scale, 0]}
-      />
-
-      {/* Leaves - bottom layer */}
-      <mesh castShadow position={[0, 3.5 * scale, 0]}>
-        <coneGeometry args={[2 * scale, 2.5 * scale, 8]} />
-        <meshStandardMaterial color="#228B22" />
+      <mesh position={[0, height - 2.6, depth / 2 + 0.06]}>
+        <planeGeometry args={[width * 0.7, 2.2]} />
+        <meshStandardMaterial
+          color="#c5f6ff"
+          emissive={accent}
+          emissiveIntensity={1.1}
+          transparent
+          opacity={0.85}
+        />
       </mesh>
-
-      {/* Leaves - middle layer */}
-      <mesh castShadow position={[0, 4.8 * scale, 0]}>
-        <coneGeometry args={[1.5 * scale, 2 * scale, 8]} />
-        <meshStandardMaterial color="#32CD32" />
+      <mesh position={[0, height / 2, depth / 2 + 0.04]}>
+        <planeGeometry args={[width * 0.58, height * 0.58]} />
+        <meshStandardMaterial
+          color="#7ff6ff"
+          emissive={accent}
+          emissiveIntensity={0.75}
+          transparent
+          opacity={0.22}
+        />
       </mesh>
-
-      {/* Leaves - top layer */}
-      <mesh castShadow position={[0, 5.8 * scale, 0]}>
-        <coneGeometry args={[0.8 * scale, 1.5 * scale, 8]} />
-        <meshStandardMaterial color="#90EE90" />
+      <mesh position={[0, height + 1.2, 0]}>
+        <cylinderGeometry args={[0.12, 0.12, 2.4, 8]} />
+        <meshStandardMaterial
+          color="#ffffff"
+          emissive={accent}
+          emissiveIntensity={1.6}
+        />
       </mesh>
     </RigidBody>
   );
 }
 
-// Rock component
-function Rock({
+function HoloBillboard({
   position,
-  scale = 1,
+  rotation,
+  label,
+  accent,
 }: {
   position: [number, number, number];
-  scale?: number;
+  rotation: [number, number, number];
+  label: string;
+  accent: string;
 }) {
+  const signTexture = useMemo(() => {
+    const canvas = document.createElement("canvas");
+    canvas.width = 256;
+    canvas.height = 128;
+    const ctx = canvas.getContext("2d")!;
+
+    const gradient = ctx.createLinearGradient(0, 0, 256, 128);
+    gradient.addColorStop(0, "rgba(4, 8, 18, 0.95)");
+    gradient.addColorStop(1, "rgba(16, 24, 48, 0.95)");
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, 256, 128);
+
+    ctx.strokeStyle = accent;
+    ctx.lineWidth = 6;
+    ctx.strokeRect(10, 10, 236, 108);
+
+    ctx.fillStyle = accent;
+    ctx.shadowColor = accent;
+    ctx.shadowBlur = 18;
+    ctx.font = "bold 46px Arial";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(label, 128, 66);
+
+    return new THREE.CanvasTexture(canvas);
+  }, [accent, label]);
+
   return (
-    <RigidBody type="fixed" position={position} colliders={false}>
-      <mesh castShadow>
-        <dodecahedronGeometry args={[scale, 0]} />
-        <meshStandardMaterial color="#808080" roughness={0.9} />
-      </mesh>
-      <CuboidCollider args={[scale * 0.8, scale * 0.6, scale * 0.8]} />
-    </RigidBody>
-  );
-}
-
-// Cloud component
-function Cloud({
-  position,
-  scale = 1,
-}: {
-  position: [number, number, number];
-  scale?: number;
-}) {
-  const cloudRef = useRef<THREE.Group>(null);
-
-  useFrame(({ clock }) => {
-    if (cloudRef.current) {
-      cloudRef.current.position.x +=
-        Math.sin(clock.getElapsedTime() * 0.1 + position[0]) * 0.01;
-    }
-  });
-
-  return (
-    <group ref={cloudRef} position={position}>
+    <group position={position} rotation={rotation}>
       <mesh>
-        <sphereGeometry args={[2 * scale, 16, 16]} />
-        <meshStandardMaterial color="#ffffff" transparent opacity={0.8} />
+        <planeGeometry args={[12, 6]} />
+        <meshStandardMaterial
+          map={signTexture}
+          emissive={accent}
+          emissiveIntensity={0.85}
+          transparent
+          opacity={0.94}
+        />
       </mesh>
-      <mesh position={[1.5 * scale, 0.3 * scale, 0]}>
-        <sphereGeometry args={[1.5 * scale, 16, 16]} />
-        <meshStandardMaterial color="#ffffff" transparent opacity={0.8} />
-      </mesh>
-      <mesh position={[-1.5 * scale, 0.2 * scale, 0]}>
-        <sphereGeometry args={[1.3 * scale, 16, 16]} />
-        <meshStandardMaterial color="#ffffff" transparent opacity={0.8} />
-      </mesh>
-      <mesh position={[0, 0.8 * scale, 0.5 * scale]}>
-        <sphereGeometry args={[1.2 * scale, 16, 16]} />
-        <meshStandardMaterial color="#ffffff" transparent opacity={0.8} />
+      <mesh position={[0, -4.5, 0]}>
+        <boxGeometry args={[0.35, 9, 0.35]} />
+        <meshStandardMaterial
+          color="#0d1325"
+          emissive={accent}
+          emissiveIntensity={0.4}
+        />
       </mesh>
     </group>
   );
 }
 
-// Item Box component
-function ItemBox({ position }: { position: [number, number, number] }) {
-  const boxRef = useRef<THREE.Mesh>(null);
+function Drone({
+  orbitRadius,
+  height,
+  speed,
+  offset,
+  accent,
+}: {
+  orbitRadius: number;
+  height: number;
+  speed: number;
+  offset: number;
+  accent: string;
+}) {
+  const droneRef = useRef<THREE.Group>(null);
 
   useFrame(({ clock }) => {
-    if (boxRef.current) {
-      boxRef.current.rotation.y = clock.getElapsedTime() * 2;
-      boxRef.current.position.y =
-        position[1] + Math.sin(clock.getElapsedTime() * 3) * 0.3;
-    }
+    if (!droneRef.current) return;
+    const t = clock.getElapsedTime() * speed + offset;
+    droneRef.current.position.set(
+      Math.cos(t) * orbitRadius,
+      height + Math.sin(t * 2.4) * 2,
+      Math.sin(t) * orbitRadius,
+    );
+    droneRef.current.rotation.y = -t;
   });
 
   return (
-    <RigidBody type="fixed" position={position} sensor>
-      <mesh ref={boxRef} castShadow>
-        <boxGeometry args={[1.5, 1.5, 1.5]} />
+    <group ref={droneRef}>
+      <mesh>
+        <sphereGeometry args={[0.85, 16, 16]} />
         <meshStandardMaterial
-          color="#ffdd00"
-          emissive="#ffaa00"
-          emissiveIntensity={0.3}
+          color="#ebfbff"
+          emissive={accent}
+          emissiveIntensity={1.2}
+          metalness={0.5}
         />
       </mesh>
-      {/* Question mark */}
-      <mesh position={[0, 0, 0.76]}>
-        <planeGeometry args={[0.8, 0.8]} />
-        <meshBasicMaterial color="#000000">
-          <canvasTexture
-            attach="map"
-            image={(() => {
-              const canvas = document.createElement("canvas");
-              canvas.width = 64;
-              canvas.height = 64;
-              const ctx = canvas.getContext("2d")!;
-              ctx.fillStyle = "#ffdd00";
-              ctx.fillRect(0, 0, 64, 64);
-              ctx.fillStyle = "#000000";
-              ctx.font = "bold 45px Arial";
-              ctx.textAlign = "center";
-              ctx.textBaseline = "middle";
-              ctx.fillText("?", 32, 32);
-              return canvas;
-            })()}
-          />
-        </meshBasicMaterial>
+      <mesh rotation={[Math.PI / 2, 0, 0]}>
+        <torusGeometry args={[2.1, 0.16, 8, 32]} />
+        <meshStandardMaterial
+          color={accent}
+          emissive={accent}
+          emissiveIntensity={1.4}
+          transparent
+          opacity={0.78}
+        />
       </mesh>
+    </group>
+  );
+}
+
+function ItemBox({ position, accent }: { position: [number, number, number]; accent: string }) {
+  const boxRef = useRef<THREE.Group>(null);
+
+  useFrame(({ clock }) => {
+    if (!boxRef.current) return;
+    boxRef.current.rotation.y = clock.getElapsedTime() * 1.8;
+    boxRef.current.position.y = Math.sin(clock.getElapsedTime() * 2.6) * 0.35;
+  });
+
+  return (
+    <RigidBody type="fixed" position={position} sensor colliders={false}>
+      <group ref={boxRef}>
+        <mesh castShadow>
+          <boxGeometry args={[1.55, 1.55, 1.55]} />
+          <meshStandardMaterial
+            color="#0d1730"
+            emissive={accent}
+            emissiveIntensity={0.95}
+            metalness={0.6}
+          />
+        </mesh>
+        <mesh scale={1.22}>
+          <boxGeometry args={[1.55, 1.55, 1.55]} />
+          <meshStandardMaterial
+            color="#8efbff"
+            emissive={accent}
+            emissiveIntensity={1.15}
+            transparent
+            opacity={0.15}
+          />
+        </mesh>
+      </group>
     </RigidBody>
   );
 }
 
-// Main Environment component
 export function Environment() {
-  // Generate tree positions — two rings: near-track and far-field
-  const trees = useMemo(() => {
-    const positions: { position: [number, number, number]; scale: number }[] =
-      [];
+  const { left, right } = TRACK_SIDES;
 
-    // Near-track trees (just outside the barriers)
-    for (let i = 0; i < 30; i++) {
-      const angle = (i / 30) * Math.PI * 2 + Math.random() * 0.4;
-      const radius = 100 + Math.random() * 40;
-      positions.push({
-        position: [Math.cos(angle) * radius, 0, Math.sin(angle) * radius],
-        scale: 0.8 + Math.random() * 0.6,
-      });
-    }
+  const towers = useMemo(() => {
+    const positions: {
+      position: [number, number, number];
+      width: number;
+      height: number;
+      depth: number;
+      accent: string;
+    }[] = [];
+    const rings = [
+      { radius: 190, count: 14 },
+      { radius: 270, count: 18 },
+      { radius: 360, count: 24 },
+    ];
 
-    // Far-field trees filling the larger world
-    for (let i = 0; i < 40; i++) {
-      const angle = (i / 40) * Math.PI * 2 + Math.random() * 0.6;
-      const radius = 160 + Math.random() * 200;
-      positions.push({
-        position: [Math.cos(angle) * radius, 0, Math.sin(angle) * radius],
-        scale: 1 + Math.random() * 1.0,
-      });
-    }
+    rings.forEach((ring, ringIndex) => {
+      for (let i = 0; i < ring.count; i++) {
+        const angle = (i / ring.count) * Math.PI * 2 + ringIndex * 0.11;
+        const height = 24 + ((i + ringIndex * 3) % 7) * 8 + ringIndex * 10;
+        positions.push({
+          position: [
+            Math.cos(angle) * ring.radius,
+            0,
+            Math.sin(angle) * ring.radius,
+          ],
+          width: 10 + ((i + ringIndex) % 3) * 3,
+          depth: 10 + ((i + ringIndex * 2) % 4) * 2,
+          height,
+          accent: (i + ringIndex) % 2 === 0 ? "#00e9ff" : "#ff46d5",
+        });
+      }
+    });
 
     return positions;
   }, []);
 
-  // Generate rock positions — scattered around the landscape
-  const rocks = useMemo(() => {
-    const positions: { position: [number, number, number]; scale: number }[] =
-      [];
-    for (let i = 0; i < 25; i++) {
-      const angle = (i / 25) * Math.PI * 2 + Math.random() * 0.8;
-      const radius = 90 + Math.random() * 180;
-      positions.push({
-        position: [Math.cos(angle) * radius, 0.5, Math.sin(angle) * radius],
-        scale: 0.5 + Math.random() * 1.2,
+  const pylonPairs = useMemo(() => {
+    const pylons: {
+      leftPos: [number, number, number];
+      rightPos: [number, number, number];
+      accent: string;
+    }[] = [];
+
+    for (let i = 0; i < TRACK_POINTS.length; i += 18) {
+      const next = TRACK_POINTS[(i + 1) % TRACK_POINTS.length];
+      const point = TRACK_POINTS[i];
+      const leftPos = left[i].clone();
+      const rightPos = right[i].clone();
+      const tangent = new THREE.Vector3(next.x - point.x, 0, next.z - point.z).normalize();
+      const offset = new THREE.Vector3(-tangent.z, 0, tangent.x).multiplyScalar(6.5);
+
+      pylons.push({
+        leftPos: [leftPos.x + offset.x, 4, leftPos.z + offset.z],
+        rightPos: [rightPos.x - offset.x, 4, rightPos.z - offset.z],
+        accent: Math.floor(i / 18) % 2 === 0 ? "#00e9ff" : "#ff46d5",
       });
     }
-    return positions;
-  }, []);
 
-  // Generate cloud positions — spread across the wider sky
-  const clouds = useMemo(() => {
-    const positions: { position: [number, number, number]; scale: number }[] =
-      [];
-    for (let i = 0; i < 16; i++) {
-      positions.push({
-        position: [
-          (Math.random() - 0.5) * 800,
-          40 + Math.random() * 40,
-          (Math.random() - 0.5) * 800,
-        ],
-        scale: 1 + Math.random() * 2,
-      });
-    }
-    return positions;
-  }, []);
+    return pylons;
+  }, [left, right]);
 
-  // Place item boxes along the track (offset from checkpoints)
+  const billboards = useMemo(
+    () => [
+      {
+        position: [-150, 18, 112] as [number, number, number],
+        rotation: [0, 0.4, 0] as [number, number, number],
+        label: "GRID",
+        accent: "#00e9ff",
+      },
+      {
+        position: [162, 22, 52] as [number, number, number],
+        rotation: [0, -1.05, 0] as [number, number, number],
+        label: "BOOST",
+        accent: "#ff46d5",
+      },
+      {
+        position: [100, 20, -150] as [number, number, number],
+        rotation: [0, -0.45, 0] as [number, number, number],
+        label: "SYNC",
+        accent: "#8d7dff",
+      },
+      {
+        position: [-122, 16, -152] as [number, number, number],
+        rotation: [0, 0.75, 0] as [number, number, number],
+        label: "VOID",
+        accent: "#00e9ff",
+      },
+    ],
+    [],
+  );
+
   const itemBoxes = useMemo(() => {
-    const positions: [number, number, number][] = [];
+    const positions: { position: [number, number, number]; accent: string }[] = [];
     const n = TRACK_POINTS.length;
     for (let i = 0; i < 8; i++) {
-      const idx = Math.floor((i / 8) * n + n / 16) % n;
+      const idx = Math.floor((i / 8) * n + n / 20) % n;
       const point = TRACK_POINTS[idx];
-      positions.push([point.x, 2, point.z]);
+      positions.push({
+        position: [point.x, 2.2, point.z],
+        accent: i % 2 === 0 ? "#00e9ff" : "#ff46d5",
+      });
     }
     return positions;
   }, []);
 
   return (
     <group>
-      {/* Trees */}
-      {trees.map((tree, i) => (
-        <Tree key={`tree-${i}`} position={tree.position} scale={tree.scale} />
-      ))}
-
-      {/* Rocks */}
-      {rocks.map((rock, i) => (
-        <Rock key={`rock-${i}`} position={rock.position} scale={rock.scale} />
-      ))}
-
-      {/* Clouds */}
-      {clouds.map((cloud, i) => (
-        <Cloud
-          key={`cloud-${i}`}
-          position={cloud.position}
-          scale={cloud.scale}
+      {towers.map((tower, i) => (
+        <NeonTower
+          key={`tower-${i}`}
+          position={tower.position}
+          width={tower.width}
+          height={tower.height}
+          depth={tower.depth}
+          accent={tower.accent}
         />
       ))}
 
-      {/* Item Boxes */}
-      {itemBoxes.map((pos, i) => (
-        <ItemBox key={`item-${i}`} position={pos} />
+      {billboards.map((billboard, i) => (
+        <HoloBillboard
+          key={`billboard-${i}`}
+          position={billboard.position}
+          rotation={billboard.rotation}
+          label={billboard.label}
+          accent={billboard.accent}
+        />
       ))}
 
-      {/* Mountains in background — pushed much further out */}
-      <group>
-        {[...Array(12)].map((_, i) => {
-          const angle = (i / 12) * Math.PI * 2;
-          const distance = 480;
-          return (
-            <mesh
-              key={`mountain-${i}`}
-              position={[
-                Math.cos(angle) * distance,
-                -10,
-                Math.sin(angle) * distance,
-              ]}
-              rotation={[0, -angle, 0]}
-            >
-              <coneGeometry args={[50, 100, 4]} />
-              <meshStandardMaterial color="#5a6b7c" />
-            </mesh>
-          );
-        })}
-      </group>
+      {pylonPairs.map((pair, i) => (
+        <group key={`pylon-pair-${i}`}>
+          <mesh position={pair.leftPos}>
+            <boxGeometry args={[1.2, 8, 1.2]} />
+            <meshStandardMaterial
+              color="#0e1528"
+              emissive={pair.accent}
+              emissiveIntensity={0.65}
+              metalness={0.75}
+            />
+          </mesh>
+          <mesh position={[pair.leftPos[0], 7.8, pair.leftPos[2]]}>
+            <boxGeometry args={[0.4, 3.5, 0.4]} />
+            <meshStandardMaterial
+              color="#ffffff"
+              emissive={pair.accent}
+              emissiveIntensity={1.4}
+            />
+          </mesh>
 
-      {/* Sun */}
-      <mesh position={[200, 120, -200]}>
-        <sphereGeometry args={[20, 32, 32]} />
-        <meshBasicMaterial color="#ffdd44" />
+          <mesh position={pair.rightPos}>
+            <boxGeometry args={[1.2, 8, 1.2]} />
+            <meshStandardMaterial
+              color="#0e1528"
+              emissive={pair.accent}
+              emissiveIntensity={0.65}
+              metalness={0.75}
+            />
+          </mesh>
+          <mesh position={[pair.rightPos[0], 7.8, pair.rightPos[2]]}>
+            <boxGeometry args={[0.4, 3.5, 0.4]} />
+            <meshStandardMaterial
+              color="#ffffff"
+              emissive={pair.accent}
+              emissiveIntensity={1.4}
+            />
+          </mesh>
+        </group>
+      ))}
+
+      {itemBoxes.map((item, i) => (
+        <ItemBox key={`item-${i}`} position={item.position} accent={item.accent} />
+      ))}
+
+      {[...Array(8)].map((_, i) => (
+        <Drone
+          key={`drone-${i}`}
+          orbitRadius={180 + i * 18}
+          height={36 + (i % 3) * 8}
+          speed={0.12 + i * 0.015}
+          offset={i * 0.8}
+          accent={i % 2 === 0 ? "#00e9ff" : "#ff46d5"}
+        />
+      ))}
+
+      <mesh position={[0, 180, -320]}>
+        <sphereGeometry args={[34, 32, 32]} />
+        <meshBasicMaterial color="#7e63ff" />
       </mesh>
 
-      {/* Directional light from sun */}
+      <mesh position={[0, 180, -320]} rotation={[Math.PI / 2, 0, 0]}>
+        <torusGeometry args={[48, 1.4, 10, 64]} />
+        <meshStandardMaterial
+          color="#00e9ff"
+          emissive="#00e9ff"
+          emissiveIntensity={1.2}
+          transparent
+          opacity={0.5}
+        />
+      </mesh>
+
+      <spotLight
+        position={[120, 180, 40]}
+        angle={0.5}
+        penumbra={0.7}
+        intensity={140}
+        color="#00dfff"
+        castShadow
+        distance={420}
+      />
+      <spotLight
+        position={[-150, 160, -80]}
+        angle={0.45}
+        penumbra={0.8}
+        intensity={120}
+        color="#ff46d5"
+        distance={420}
+      />
       <directionalLight
-        position={[200, 120, -200]}
-        intensity={1.2}
+        position={[80, 110, -20]}
+        intensity={0.45}
+        color="#8eb7ff"
         castShadow
         shadow-mapSize-width={2048}
         shadow-mapSize-height={2048}
-        shadow-camera-far={600}
-        shadow-camera-left={-250}
-        shadow-camera-right={250}
-        shadow-camera-top={250}
-        shadow-camera-bottom={-250}
+        shadow-camera-far={700}
+        shadow-camera-left={-280}
+        shadow-camera-right={280}
+        shadow-camera-top={280}
+        shadow-camera-bottom={-280}
       />
-
-      {/* Ambient light */}
-      <ambientLight intensity={0.4} />
-
-      {/* Hemisphere light for sky/ground gradient */}
-      <hemisphereLight args={["#87CEEB", "#4a7c59", 0.5]} />
+      <ambientLight intensity={0.32} color="#5d79ff" />
+      <hemisphereLight args={["#12254f", "#05070d", 0.55]} />
     </group>
   );
 }

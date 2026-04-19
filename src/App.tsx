@@ -28,19 +28,18 @@ function GameScene() {
 
   return (
     <>
-      {/* Sky */}
-      <color attach="background" args={["#87CEEB"]} />
-      <fog attach="fog" args={["#87CEEB", 100, 800]} />
+      <color attach="background" args={["#040712"]} />
+      <fog attach="fog" args={["#040712", 90, 700]} />
 
       {/* Stars (visible at edges) */}
       <Stars
-        radius={200}
-        depth={50}
-        count={1000}
-        factor={4}
-        saturation={0}
+        radius={260}
+        depth={120}
+        count={1400}
+        factor={5}
+        saturation={0.2}
         fade
-        speed={1}
+        speed={0.6}
       />
 
       {/* Physics World */}

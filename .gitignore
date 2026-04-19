@@ -110,3 +110,7 @@ Thumbs.db
 
 # Temporary files
 tmp*
+
+# AI Agents
+.codex
+.claude/

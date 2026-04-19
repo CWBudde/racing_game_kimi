@@ -56,11 +56,11 @@ export function GameUI() {
   if (!isPlaying && !gameOver) {
     return (
       <div className="absolute inset-0 flex items-center justify-center bg-black/70 z-50">
-        <div className="bg-gradient-to-br from-blue-900 to-purple-900 p-8 rounded-2xl shadow-2xl text-center max-w-md border-4 border-yellow-400">
+        <div className="bg-gradient-to-br from-cyan-950 via-slate-950 to-fuchsia-950 p-8 rounded-2xl shadow-2xl text-center max-w-md border-4 border-cyan-400">
           <h1 className="text-5xl font-bold text-white mb-2 drop-shadow-lg">
-            <span className="text-yellow-400">KART</span> RACING
+            <span className="text-cyan-300">NEON</span> CIRCUIT
           </h1>
-          <p className="text-gray-300 mb-6">3D Racing Adventure</p>
+          <p className="text-fuchsia-200 mb-6">Cyber Sprint through the Grid District</p>
 
           <div className="bg-black/30 p-4 rounded-lg mb-6 text-left">
             <h3 className="text-yellow-400 font-bold mb-2">Controls:</h3>
@@ -98,7 +98,7 @@ export function GameUI() {
 
           <button
             onClick={startGame}
-            className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-bold py-4 px-12 rounded-full text-xl transition-all transform hover:scale-105 shadow-lg"
+            className="bg-gradient-to-r from-cyan-500 to-fuchsia-500 hover:from-cyan-400 hover:to-fuchsia-400 text-white font-bold py-4 px-12 rounded-full text-xl transition-all transform hover:scale-105 shadow-lg"
           >
             START RACE
           </button>
@@ -111,7 +111,7 @@ export function GameUI() {
   if (gameOver) {
     return (
       <div className="absolute inset-0 flex items-center justify-center bg-black/80 z-50">
-        <div className="bg-gradient-to-br from-purple-900 to-blue-900 p-8 rounded-2xl shadow-2xl text-center max-w-md border-4 border-yellow-400">
+        <div className="bg-gradient-to-br from-fuchsia-950 via-slate-950 to-cyan-950 p-8 rounded-2xl shadow-2xl text-center max-w-md border-4 border-fuchsia-400">
           <h1 className="text-5xl font-bold text-white mb-4 drop-shadow-lg">
             <span className="text-yellow-400">RACE</span> COMPLETE!
           </h1>
@@ -156,7 +156,7 @@ export function GameUI() {
   if (isPaused) {
     return (
       <div className="absolute inset-0 flex items-center justify-center bg-black/60 z-50">
-        <div className="bg-gradient-to-br from-blue-900 to-purple-900 p-8 rounded-2xl shadow-2xl text-center border-4 border-white">
+        <div className="bg-gradient-to-br from-cyan-950 to-fuchsia-950 p-8 rounded-2xl shadow-2xl text-center border-4 border-cyan-300">
           <h1 className="text-4xl font-bold text-white mb-6">PAUSED</h1>
           <div className="flex gap-4 justify-center">
             <button
