@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef } from "react";
+import { TRACKS } from "./trackData";
 import { useGameStore } from "../store/gameStore";
 
 // Format time as MM:SS.ms
@@ -21,11 +22,14 @@ export function GameUI() {
     speed,
     boostAmount,
     hasItem,
+    selectedTrackId,
+    selectTrack,
     startGame,
     pauseGame,
     resumeGame,
     resetGame,
   } = useGameStore();
+  const selectedTrack = TRACKS.find((track) => track.id === selectedTrackId) ?? TRACKS[0];
 
   const [showControls, setShowControls] = useState(true);
   const controlsTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -47,20 +51,68 @@ export function GameUI() {
 
   // Show controls when game starts
   useEffect(() => {
-    if (isPlaying) {
+    if (!isPlaying) return;
+
+    const id = setTimeout(() => {
       setShowControls(true);
-    }
+    }, 0);
+
+    return () => clearTimeout(id);
   }, [isPlaying]);
 
   // Start screen
   if (!isPlaying && !gameOver) {
     return (
-      <div className="absolute inset-0 flex items-center justify-center bg-black/70 z-50">
-        <div className="bg-gradient-to-br from-cyan-950 via-slate-950 to-fuchsia-950 p-8 rounded-2xl shadow-2xl text-center max-w-md border-4 border-cyan-400">
-          <h1 className="text-5xl font-bold text-white mb-2 drop-shadow-lg">
-            <span className="text-cyan-300">NEON</span> CIRCUIT
+      <div className="absolute inset-0 flex items-start md:items-center justify-center bg-black/70 z-50 overflow-y-auto p-4">
+        <div className="bg-gradient-to-br from-cyan-950 via-slate-950 to-fuchsia-950 p-6 md:p-8 rounded-2xl shadow-2xl text-center w-full max-w-5xl border-4 border-cyan-400">
+          <h1 className="text-4xl md:text-5xl font-bold text-white mb-2 drop-shadow-lg">
+            <span className="text-cyan-300">TRACK</span> SELECT
           </h1>
-          <p className="text-fuchsia-200 mb-6">Cyber Sprint through the Grid District</p>
+          <p className="text-fuchsia-200 mb-6">Choose a course, then start the race.</p>
+
+          <div className="grid gap-3 md:grid-cols-3 mb-6 text-left">
+            {TRACKS.map((track) => {
+              const isSelected = track.id === selectedTrackId;
+              const accent =
+                track.theme === "neon"
+                  ? "text-cyan-200"
+                  : track.theme === "desert"
+                    ? "text-orange-200"
+                    : "text-green-200";
+
+              return (
+                <button
+                  key={track.id}
+                  type="button"
+                  onClick={() => selectTrack(track.id)}
+                  className={`min-h-40 rounded-xl border p-4 transition-all ${
+                    isSelected
+                      ? "border-cyan-300 bg-cyan-400/15 shadow-[0_0_0_1px_rgba(103,232,249,0.45)]"
+                      : "border-white/10 bg-white/5 hover:bg-white/10"
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="text-xl font-bold text-white">{track.name}</div>
+                      <div className={`text-sm mt-1 ${accent}`}>{track.location}</div>
+                    </div>
+                    <div className="text-right text-xs uppercase text-slate-300">
+                      <div>{track.difficulty}</div>
+                      <div>{track.laps} laps</div>
+                    </div>
+                  </div>
+                  <div className="text-sm text-slate-200 mt-3">{track.description}</div>
+                </button>
+              );
+            })}
+          </div>
+
+          {selectedTrack && (
+            <div className="bg-black/30 p-3 rounded-lg mb-6 text-sm text-cyan-100">
+              Selected: <span className="font-bold text-white">{selectedTrack.name}</span>{" "}
+              · {selectedTrack.location} · {selectedTrack.difficulty}
+            </div>
+          )}
 
           <div className="bg-black/30 p-4 rounded-lg mb-6 text-left">
             <h3 className="text-yellow-400 font-bold mb-2">Controls:</h3>

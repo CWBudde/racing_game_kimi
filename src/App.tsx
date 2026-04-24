@@ -3,7 +3,7 @@ import { Canvas } from "@react-three/fiber";
 import { Physics } from "@react-three/rapier";
 import { Stars } from "@react-three/drei";
 import { Track } from "./components/Track";
-import { getTrackStart } from "./components/trackData";
+import { getTrackLayout, getTrackStart } from "./components/trackData";
 import { Car } from "./components/Car";
 import { CameraController } from "./components/CameraController";
 import { Environment } from "./components/Environment";
@@ -13,7 +13,11 @@ import { useGameStore } from "./store/gameStore";
 import "./App.css";
 
 function GameScene() {
-  const { isPlaying, isPaused, updateLapTime } = useGameStore();
+  const { isPlaying, isPaused, updateLapTime, selectedTrackId } = useGameStore();
+  const trackLayout = getTrackLayout(selectedTrackId);
+  const playerStart = getTrackStart(selectedTrackId);
+  const isNeon = trackLayout.definition.theme === "neon";
+  const isDesert = trackLayout.definition.theme === "desert";
 
   // Update lap time
   useEffect(() => {
@@ -28,30 +32,40 @@ function GameScene() {
 
   return (
     <>
-      <color attach="background" args={["#040712"]} />
-      <fog attach="fog" args={["#040712", 90, 700]} />
+      <color
+        attach="background"
+        args={[isNeon ? "#040712" : isDesert ? "#d9a66c" : "#87CEEB"]}
+      />
+      <fog
+        attach="fog"
+        args={[
+          isNeon ? "#040712" : isDesert ? "#d9a66c" : "#87CEEB",
+          isNeon ? 90 : 100,
+          isNeon ? 700 : 800,
+        ]}
+      />
 
       {/* Stars (visible at edges) */}
       <Stars
-        radius={260}
-        depth={120}
-        count={1400}
-        factor={5}
-        saturation={0.2}
+        radius={isNeon ? 260 : 200}
+        depth={isNeon ? 120 : 50}
+        count={isNeon ? 1400 : 1000}
+        factor={isNeon ? 5 : 4}
+        saturation={isNeon ? 0.2 : 0}
         fade
-        speed={0.6}
+        speed={isNeon ? 0.6 : 1}
       />
 
       {/* Physics World */}
       <Physics gravity={[0, -10, 0]}>
         {/* Track */}
-        <Track />
+        <Track trackId={selectedTrackId} />
 
         {/* Player Car - spawn on track at start/finish line */}
-        <Car position={getTrackStart().position} />
+        <Car key={`player-${selectedTrackId}`} position={playerStart.position} />
 
         {/* Environment */}
-        <Environment />
+        <Environment trackId={selectedTrackId} />
       </Physics>
 
       {/* Camera */}

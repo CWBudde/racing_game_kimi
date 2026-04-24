@@ -1,14 +1,17 @@
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
-import { getTrackStart } from '../components/trackData';
+import { DEFAULT_TRACK_ID, getTrackStart, TRACKS } from '../components/trackData';
 
-const trackStart = getTrackStart();
+const initialTrack = TRACKS.find((track) => track.id === DEFAULT_TRACK_ID) ?? TRACKS[0];
+const initialTrackId = initialTrack?.id ?? DEFAULT_TRACK_ID;
+const initialTrackStart = getTrackStart(initialTrackId);
 
 export interface GameState {
   // Game status
   isPlaying: boolean;
   isPaused: boolean;
   gameOver: boolean;
+  selectedTrackId: string;
   
   // Race stats
   lap: number;
@@ -29,6 +32,7 @@ export interface GameState {
   carRotation: [number, number, number];
   
   // Actions
+  selectTrack: (trackId: string) => void;
   startGame: () => void;
   pauseGame: () => void;
   resumeGame: () => void;
@@ -54,9 +58,10 @@ export const useGameStore = create<GameState>()(
     isPlaying: false,
     isPaused: false,
     gameOver: false,
+    selectedTrackId: initialTrackId,
     
     lap: 1,
-    totalLaps: 3,
+    totalLaps: initialTrack?.laps ?? 3,
     lapTimes: [],
     currentLapTime: 0,
     bestLapTime: null,
@@ -67,43 +72,75 @@ export const useGameStore = create<GameState>()(
     hasItem: false,
     currentItem: null,
     
-    carPosition: trackStart.position,
-    carRotation: [0, trackStart.yaw, 0],
+    carPosition: initialTrackStart.position,
+    carRotation: [0, initialTrackStart.yaw, 0],
     
     // Game flow actions
-    startGame: () => set({ 
-      isPlaying: true, 
-      isPaused: false, 
-      gameOver: false,
-      lap: 1,
-      lapTimes: [],
-      currentLapTime: 0,
-      speed: 0,
-      boostAmount: 100,
-      hasItem: false,
-      currentItem: null,
-      carPosition: trackStart.position,
-      carRotation: [0, trackStart.yaw, 0]
+    selectTrack: (trackId) => {
+      const track = TRACKS.find((entry) => entry.id === trackId);
+      if (!track) return;
+      const trackStart = getTrackStart(trackId);
+
+      set({
+        selectedTrackId: trackId,
+        totalLaps: track.laps,
+        lap: 1,
+        lapTimes: [],
+        currentLapTime: 0,
+        speed: 0,
+        boostAmount: 100,
+        hasItem: false,
+        currentItem: null,
+        carPosition: trackStart.position,
+        carRotation: [0, trackStart.yaw, 0],
+      });
+    },
+
+    startGame: () => set((state) => {
+      const track = TRACKS.find((entry) => entry.id === state.selectedTrackId);
+      const trackStart = getTrackStart(state.selectedTrackId);
+
+      return { 
+        isPlaying: true, 
+        isPaused: false, 
+        gameOver: false,
+        lap: 1,
+        totalLaps: track?.laps ?? state.totalLaps,
+        lapTimes: [],
+        currentLapTime: 0,
+        speed: 0,
+        boostAmount: 100,
+        hasItem: false,
+        currentItem: null,
+        carPosition: trackStart.position,
+        carRotation: [0, trackStart.yaw, 0]
+      };
     }),
     
     pauseGame: () => set({ isPaused: true }),
     resumeGame: () => set({ isPaused: false }),
     endGame: () => set({ isPlaying: false, gameOver: true }),
     
-    resetGame: () => set({
-      isPlaying: false,
-      isPaused: false,
-      gameOver: false,
-      lap: 1,
-      lapTimes: [],
-      currentLapTime: 0,
-      bestLapTime: null,
-      speed: 0,
-      boostAmount: 100,
-      hasItem: false,
-      currentItem: null,
-      carPosition: trackStart.position,
-      carRotation: [0, trackStart.yaw, 0]
+    resetGame: () => set((state) => {
+      const track = TRACKS.find((entry) => entry.id === state.selectedTrackId);
+      const trackStart = getTrackStart(state.selectedTrackId);
+
+      return {
+        isPlaying: false,
+        isPaused: false,
+        gameOver: false,
+        lap: 1,
+        totalLaps: track?.laps ?? state.totalLaps,
+        lapTimes: [],
+        currentLapTime: 0,
+        bestLapTime: null,
+        speed: 0,
+        boostAmount: 100,
+        hasItem: false,
+        currentItem: null,
+        carPosition: trackStart.position,
+        carRotation: [0, trackStart.yaw, 0]
+      };
     }),
     
     // Lap actions

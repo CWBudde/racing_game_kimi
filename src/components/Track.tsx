@@ -3,19 +3,26 @@ import { useFrame } from "@react-three/fiber";
 import { CuboidCollider, RigidBody } from "@react-three/rapier";
 import * as THREE from "three";
 import {
-  TRACK_POINTS,
-  TRACK_SIDES,
   createGroundTexture,
   createRoadTexture,
   generateBarrierSegments,
+  getTrackLayout,
 } from "./trackData";
 
-export function Track() {
+interface TrackProps {
+  trackId: string;
+}
+
+export function Track({ trackId }: TrackProps) {
   const trackRef = useRef<THREE.Group>(null);
   const checkpointsRef = useRef<THREE.Group>(null);
 
-  const trackPoints = TRACK_POINTS;
-  const { left, right } = TRACK_SIDES;
+  const layout = getTrackLayout(trackId);
+  const trackPoints = layout.points;
+  const { left, right } = layout.sides;
+  const theme = layout.definition.theme;
+  const isNeon = theme === "neon";
+  const isDesert = theme === "desert";
 
   const trackGeometry = useMemo(() => {
     const geometry = new THREE.BufferGeometry();
@@ -62,21 +69,21 @@ export function Track() {
   }, [left, right, trackPoints]);
 
   const roadTexture = useMemo(() => {
-    const texture = new THREE.CanvasTexture(createRoadTexture());
+    const texture = new THREE.CanvasTexture(createRoadTexture(theme));
     texture.wrapS = THREE.ClampToEdgeWrapping;
     texture.wrapT = THREE.RepeatWrapping;
     texture.anisotropy = 8;
     return texture;
-  }, []);
+  }, [theme]);
 
   const groundTexture = useMemo(() => {
-    const texture = new THREE.CanvasTexture(createGroundTexture());
+    const texture = new THREE.CanvasTexture(createGroundTexture(theme));
     texture.wrapS = THREE.RepeatWrapping;
     texture.wrapT = THREE.RepeatWrapping;
-    texture.repeat.set(24, 24);
+    texture.repeat.set(isNeon ? 24 : 12, isNeon ? 24 : 12);
     texture.anisotropy = 8;
     return texture;
-  }, []);
+  }, [isNeon, theme]);
 
   const groundGeometry = useMemo(() => new THREE.PlaneGeometry(1400, 1400, 1, 1), []);
 
@@ -129,11 +136,11 @@ export function Track() {
         >
           <meshStandardMaterial
             map={groundTexture}
-            color="#07101c"
+            color={isNeon ? "#07101c" : isDesert ? "#a06a3e" : "#4a7c59"}
             roughness={0.95}
-            metalness={0.15}
-            emissive="#061222"
-            emissiveIntensity={0.28}
+            metalness={isNeon ? 0.15 : 0.02}
+            emissive={isNeon ? "#061222" : "#000000"}
+            emissiveIntensity={isNeon ? 0.28 : 0}
           />
         </mesh>
         <CuboidCollider args={[700, 0.5, 700]} position={[0, -0.6, 0]} />
@@ -143,41 +150,43 @@ export function Track() {
         <mesh geometry={trackGeometry} receiveShadow castShadow>
           <meshStandardMaterial
             map={roadTexture}
-            roughness={0.45}
-            metalness={0.35}
-            emissive="#1a2e63"
-            emissiveIntensity={0.4}
+            roughness={isNeon ? 0.45 : 0.7}
+            metalness={isNeon ? 0.35 : 0.1}
+            emissive={isNeon ? "#1a2e63" : "#000000"}
+            emissiveIntensity={isNeon ? 0.4 : 0}
           />
         </mesh>
       </RigidBody>
 
       {trackPoints.map((_, i) => {
-        if (i % 4 !== 0) return null;
+        if (i % (isNeon ? 4 : 5) !== 0) return null;
         const ni = (i + 1) % trackPoints.length;
         const angle = Math.atan2(
           trackPoints[ni].x - trackPoints[i].x,
           trackPoints[ni].z - trackPoints[i].z,
         );
-        const isCyan = Math.floor(i / 4) % 2 === 0;
+        const isPrimary = Math.floor(i / (isNeon ? 4 : 5)) % 2 === 0;
+        const primaryColor = isNeon ? "#1de7ff" : "#cc2222";
+        const secondaryColor = isNeon ? "#ff3ccf" : "#ffffff";
 
         return (
           <group key={`edge-strip-${i}`}>
             <mesh position={[left[i].x, 0.1, left[i].z]} rotation={[0, angle, 0]}>
               <boxGeometry args={[1.8, 0.14, 3.2]} />
               <meshStandardMaterial
-                color={isCyan ? "#1de7ff" : "#ff3ccf"}
-                emissive={isCyan ? "#1de7ff" : "#ff3ccf"}
-                emissiveIntensity={0.8}
-                metalness={0.3}
+                color={isPrimary ? primaryColor : secondaryColor}
+                emissive={isNeon ? (isPrimary ? primaryColor : secondaryColor) : "#000000"}
+                emissiveIntensity={isNeon ? 0.8 : 0}
+                metalness={isNeon ? 0.3 : 0.05}
               />
             </mesh>
             <mesh position={[right[i].x, 0.1, right[i].z]} rotation={[0, angle, 0]}>
               <boxGeometry args={[1.8, 0.14, 3.2]} />
               <meshStandardMaterial
-                color={isCyan ? "#ff3ccf" : "#1de7ff"}
-                emissive={isCyan ? "#ff3ccf" : "#1de7ff"}
-                emissiveIntensity={0.8}
-                metalness={0.3}
+                color={isPrimary ? secondaryColor : primaryColor}
+                emissive={isNeon ? (isPrimary ? secondaryColor : primaryColor) : "#000000"}
+                emissiveIntensity={isNeon ? 0.8 : 0}
+                metalness={isNeon ? 0.3 : 0.05}
               />
             </mesh>
           </group>
@@ -194,21 +203,23 @@ export function Track() {
           <mesh castShadow>
             <boxGeometry args={[0.55, 1.4, seg.length]} />
             <meshStandardMaterial
-              color="#0b1020"
-              emissive={i % 2 === 0 ? "#00d9ff" : "#ff3ccf"}
-              emissiveIntensity={0.65}
-              metalness={0.65}
+              color={isNeon ? "#0b1020" : i % 2 === 0 ? "#cc3333" : "#bbbbbb"}
+              emissive={isNeon ? (i % 2 === 0 ? "#00d9ff" : "#ff3ccf") : "#000000"}
+              emissiveIntensity={isNeon ? 0.65 : 0}
+              metalness={isNeon ? 0.65 : 0.1}
               roughness={0.35}
             />
           </mesh>
-          <mesh position={[0, 0.88, 0]}>
-            <boxGeometry args={[0.12, 0.08, seg.length * 0.96]} />
-            <meshStandardMaterial
-              color={i % 2 === 0 ? "#00efff" : "#ff6ce4"}
-              emissive={i % 2 === 0 ? "#00efff" : "#ff6ce4"}
-              emissiveIntensity={1.2}
-            />
-          </mesh>
+          {isNeon && (
+            <mesh position={[0, 0.88, 0]}>
+              <boxGeometry args={[0.12, 0.08, seg.length * 0.96]} />
+              <meshStandardMaterial
+                color={i % 2 === 0 ? "#00efff" : "#ff6ce4"}
+                emissive={i % 2 === 0 ? "#00efff" : "#ff6ce4"}
+                emissiveIntensity={1.2}
+              />
+            </mesh>
+          )}
           <CuboidCollider args={[0.275, 0.7, seg.length / 2]} />
         </RigidBody>
       ))}
@@ -223,21 +234,23 @@ export function Track() {
           <mesh castShadow>
             <boxGeometry args={[0.55, 1.4, seg.length]} />
             <meshStandardMaterial
-              color="#0b1020"
-              emissive={i % 2 === 0 ? "#ff3ccf" : "#00d9ff"}
-              emissiveIntensity={0.65}
-              metalness={0.65}
+              color={isNeon ? "#0b1020" : i % 2 === 0 ? "#cc3333" : "#bbbbbb"}
+              emissive={isNeon ? (i % 2 === 0 ? "#ff3ccf" : "#00d9ff") : "#000000"}
+              emissiveIntensity={isNeon ? 0.65 : 0}
+              metalness={isNeon ? 0.65 : 0.1}
               roughness={0.35}
             />
           </mesh>
-          <mesh position={[0, 0.88, 0]}>
-            <boxGeometry args={[0.12, 0.08, seg.length * 0.96]} />
-            <meshStandardMaterial
-              color={i % 2 === 0 ? "#ff6ce4" : "#00efff"}
-              emissive={i % 2 === 0 ? "#ff6ce4" : "#00efff"}
-              emissiveIntensity={1.2}
-            />
-          </mesh>
+          {isNeon && (
+            <mesh position={[0, 0.88, 0]}>
+              <boxGeometry args={[0.12, 0.08, seg.length * 0.96]} />
+              <meshStandardMaterial
+                color={i % 2 === 0 ? "#ff6ce4" : "#00efff"}
+                emissive={i % 2 === 0 ? "#ff6ce4" : "#00efff"}
+                emissiveIntensity={1.2}
+              />
+            </mesh>
+          )}
           <CuboidCollider args={[0.275, 0.7, seg.length / 2]} />
         </RigidBody>
       ))}
@@ -252,21 +265,23 @@ export function Track() {
             <mesh castShadow>
               <torusGeometry args={[4.6, 0.28, 10, 48]} />
               <meshStandardMaterial
-                color={i % 2 === 0 ? "#00e8ff" : "#ff4bd6"}
-                emissive={i % 2 === 0 ? "#00e8ff" : "#ff4bd6"}
-                emissiveIntensity={1}
+                color={isNeon ? (i % 2 === 0 ? "#00e8ff" : "#ff4bd6") : "#ffdd00"}
+                emissive={isNeon ? (i % 2 === 0 ? "#00e8ff" : "#ff4bd6") : "#ffaa00"}
+                emissiveIntensity={isNeon ? 1 : 0.3}
               />
             </mesh>
-            <mesh rotation={[Math.PI / 2, 0, 0]}>
-              <torusGeometry args={[2.9, 0.18, 8, 32]} />
-              <meshStandardMaterial
-                color="#8efbff"
-                emissive="#8efbff"
-                emissiveIntensity={0.9}
-                transparent
-                opacity={0.75}
-              />
-            </mesh>
+            {isNeon && (
+              <mesh rotation={[Math.PI / 2, 0, 0]}>
+                <torusGeometry args={[2.9, 0.18, 8, 32]} />
+                <meshStandardMaterial
+                  color="#8efbff"
+                  emissive="#8efbff"
+                  emissiveIntensity={0.9}
+                  transparent
+                  opacity={0.75}
+                />
+              </mesh>
+            )}
             {[...Array(6)].map((_, j) => (
               <mesh
                 key={j}
@@ -278,9 +293,9 @@ export function Track() {
               >
                 <sphereGeometry args={[0.18, 10, 10]} />
                 <meshStandardMaterial
-                  color="#ffffff"
-                  emissive={j % 2 === 0 ? "#00e8ff" : "#ff4bd6"}
-                  emissiveIntensity={1.4}
+                  color={isNeon ? "#ffffff" : "#ffff00"}
+                  emissive={isNeon ? (j % 2 === 0 ? "#00e8ff" : "#ff4bd6") : "#ffff00"}
+                  emissiveIntensity={isNeon ? 1.4 : 0.5}
                 />
               </mesh>
             ))}
@@ -293,8 +308,11 @@ export function Track() {
         rotation={[0, startAngle, 0]}
       >
         <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-          <planeGeometry args={[22, 8]} />
-          <meshStandardMaterial emissive="#1f2550" emissiveIntensity={0.35}>
+          <planeGeometry args={[layout.width, 8]} />
+          <meshStandardMaterial
+            emissive={isNeon ? "#1f2550" : "#000000"}
+            emissiveIntensity={isNeon ? 0.35 : 0}
+          >
             <canvasTexture
               attach="map"
               image={(() => {
@@ -306,7 +324,9 @@ export function Track() {
                 ctx.fillRect(0, 0, 256, 96);
                 for (let r = 0; r < 3; r++) {
                   for (let c = 0; c < 8; c++) {
-                    ctx.fillStyle = (r + c) % 2 === 0 ? "#00f0ff" : "#ff3ccf";
+                    ctx.fillStyle = isNeon
+                      ? (r + c) % 2 === 0 ? "#00f0ff" : "#ff3ccf"
+                      : (r + c) % 2 === 0 ? "#ffffff" : "#000000";
                     ctx.fillRect(c * 32, r * 32, 32, 32);
                   }
                 }

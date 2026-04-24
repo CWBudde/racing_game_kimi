@@ -2,7 +2,7 @@ import { useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import { RigidBody } from "@react-three/rapier";
 import * as THREE from "three";
-import { TRACK_POINTS, TRACK_SIDES } from "./trackData";
+import { getTrackLayout } from "./trackData";
 
 function NeonTower({
   position,
@@ -210,8 +210,16 @@ function ItemBox({ position, accent }: { position: [number, number, number]; acc
   );
 }
 
-export function Environment() {
-  const { left, right } = TRACK_SIDES;
+interface EnvironmentProps {
+  trackId: string;
+}
+
+export function Environment({ trackId }: EnvironmentProps) {
+  const layout = getTrackLayout(trackId);
+  const trackPoints = layout.points;
+  const { left, right } = layout.sides;
+  const isNeon = layout.definition.theme === "neon";
+  const isDesert = layout.definition.theme === "desert";
 
   const towers = useMemo(() => {
     const positions: {
@@ -255,9 +263,9 @@ export function Environment() {
       accent: string;
     }[] = [];
 
-    for (let i = 0; i < TRACK_POINTS.length; i += 18) {
-      const next = TRACK_POINTS[(i + 1) % TRACK_POINTS.length];
-      const point = TRACK_POINTS[i];
+    for (let i = 0; i < trackPoints.length; i += 18) {
+      const next = trackPoints[(i + 1) % trackPoints.length];
+      const point = trackPoints[i];
       const leftPos = left[i].clone();
       const rightPos = right[i].clone();
       const tangent = new THREE.Vector3(next.x - point.x, 0, next.z - point.z).normalize();
@@ -271,7 +279,7 @@ export function Environment() {
     }
 
     return pylons;
-  }, [left, right]);
+  }, [left, right, trackPoints]);
 
   const billboards = useMemo(
     () => [
@@ -305,144 +313,179 @@ export function Environment() {
 
   const itemBoxes = useMemo(() => {
     const positions: { position: [number, number, number]; accent: string }[] = [];
-    const n = TRACK_POINTS.length;
+    const n = trackPoints.length;
     for (let i = 0; i < 8; i++) {
       const idx = Math.floor((i / 8) * n + n / 20) % n;
-      const point = TRACK_POINTS[idx];
+      const point = trackPoints[idx];
       positions.push({
         position: [point.x, 2.2, point.z],
         accent: i % 2 === 0 ? "#00e9ff" : "#ff46d5",
       });
     }
     return positions;
-  }, []);
+  }, [trackPoints]);
 
   return (
     <group>
-      {towers.map((tower, i) => (
-        <NeonTower
-          key={`tower-${i}`}
-          position={tower.position}
-          width={tower.width}
-          height={tower.height}
-          depth={tower.depth}
-          accent={tower.accent}
-        />
-      ))}
+      {isNeon &&
+        towers.map((tower, i) => (
+          <NeonTower
+            key={`tower-${i}`}
+            position={tower.position}
+            width={tower.width}
+            height={tower.height}
+            depth={tower.depth}
+            accent={tower.accent}
+          />
+        ))}
 
-      {billboards.map((billboard, i) => (
-        <HoloBillboard
-          key={`billboard-${i}`}
-          position={billboard.position}
-          rotation={billboard.rotation}
-          label={billboard.label}
-          accent={billboard.accent}
-        />
-      ))}
+      {isNeon &&
+        billboards.map((billboard, i) => (
+          <HoloBillboard
+            key={`billboard-${i}`}
+            position={billboard.position}
+            rotation={billboard.rotation}
+            label={billboard.label}
+            accent={billboard.accent}
+          />
+        ))}
 
-      {pylonPairs.map((pair, i) => (
-        <group key={`pylon-pair-${i}`}>
-          <mesh position={pair.leftPos}>
-            <boxGeometry args={[1.2, 8, 1.2]} />
-            <meshStandardMaterial
-              color="#0e1528"
-              emissive={pair.accent}
-              emissiveIntensity={0.65}
-              metalness={0.75}
-            />
-          </mesh>
-          <mesh position={[pair.leftPos[0], 7.8, pair.leftPos[2]]}>
-            <boxGeometry args={[0.4, 3.5, 0.4]} />
-            <meshStandardMaterial
-              color="#ffffff"
-              emissive={pair.accent}
-              emissiveIntensity={1.4}
-            />
-          </mesh>
+      {isNeon &&
+        pylonPairs.map((pair, i) => (
+          <group key={`pylon-pair-${i}`}>
+            <mesh position={pair.leftPos}>
+              <boxGeometry args={[1.2, 8, 1.2]} />
+              <meshStandardMaterial
+                color="#0e1528"
+                emissive={pair.accent}
+                emissiveIntensity={0.65}
+                metalness={0.75}
+              />
+            </mesh>
+            <mesh position={[pair.leftPos[0], 7.8, pair.leftPos[2]]}>
+              <boxGeometry args={[0.4, 3.5, 0.4]} />
+              <meshStandardMaterial
+                color="#ffffff"
+                emissive={pair.accent}
+                emissiveIntensity={1.4}
+              />
+            </mesh>
 
-          <mesh position={pair.rightPos}>
-            <boxGeometry args={[1.2, 8, 1.2]} />
-            <meshStandardMaterial
-              color="#0e1528"
-              emissive={pair.accent}
-              emissiveIntensity={0.65}
-              metalness={0.75}
-            />
-          </mesh>
-          <mesh position={[pair.rightPos[0], 7.8, pair.rightPos[2]]}>
-            <boxGeometry args={[0.4, 3.5, 0.4]} />
-            <meshStandardMaterial
-              color="#ffffff"
-              emissive={pair.accent}
-              emissiveIntensity={1.4}
-            />
-          </mesh>
-        </group>
-      ))}
+            <mesh position={pair.rightPos}>
+              <boxGeometry args={[1.2, 8, 1.2]} />
+              <meshStandardMaterial
+                color="#0e1528"
+                emissive={pair.accent}
+                emissiveIntensity={0.65}
+                metalness={0.75}
+              />
+            </mesh>
+            <mesh position={[pair.rightPos[0], 7.8, pair.rightPos[2]]}>
+              <boxGeometry args={[0.4, 3.5, 0.4]} />
+              <meshStandardMaterial
+                color="#ffffff"
+                emissive={pair.accent}
+                emissiveIntensity={1.4}
+              />
+            </mesh>
+          </group>
+        ))}
 
       {itemBoxes.map((item, i) => (
         <ItemBox key={`item-${i}`} position={item.position} accent={item.accent} />
       ))}
 
-      {[...Array(8)].map((_, i) => (
-        <Drone
-          key={`drone-${i}`}
-          orbitRadius={180 + i * 18}
-          height={36 + (i % 3) * 8}
-          speed={0.12 + i * 0.015}
-          offset={i * 0.8}
-          accent={i % 2 === 0 ? "#00e9ff" : "#ff46d5"}
-        />
-      ))}
+      {isNeon &&
+        [...Array(8)].map((_, i) => (
+          <Drone
+            key={`drone-${i}`}
+            orbitRadius={180 + i * 18}
+            height={36 + (i % 3) * 8}
+            speed={0.12 + i * 0.015}
+            offset={i * 0.8}
+            accent={i % 2 === 0 ? "#00e9ff" : "#ff46d5"}
+          />
+        ))}
 
-      <mesh position={[0, 180, -320]}>
-        <sphereGeometry args={[34, 32, 32]} />
-        <meshBasicMaterial color="#7e63ff" />
-      </mesh>
+      {isNeon ? (
+        <>
+          <mesh position={[0, 180, -320]}>
+            <sphereGeometry args={[34, 32, 32]} />
+            <meshBasicMaterial color="#7e63ff" />
+          </mesh>
 
-      <mesh position={[0, 180, -320]} rotation={[Math.PI / 2, 0, 0]}>
-        <torusGeometry args={[48, 1.4, 10, 64]} />
-        <meshStandardMaterial
-          color="#00e9ff"
-          emissive="#00e9ff"
-          emissiveIntensity={1.2}
-          transparent
-          opacity={0.5}
-        />
-      </mesh>
+          <mesh position={[0, 180, -320]} rotation={[Math.PI / 2, 0, 0]}>
+            <torusGeometry args={[48, 1.4, 10, 64]} />
+            <meshStandardMaterial
+              color="#00e9ff"
+              emissive="#00e9ff"
+              emissiveIntensity={1.2}
+              transparent
+              opacity={0.5}
+            />
+          </mesh>
 
-      <spotLight
-        position={[120, 180, 40]}
-        angle={0.5}
-        penumbra={0.7}
-        intensity={140}
-        color="#00dfff"
-        castShadow
-        distance={420}
-      />
-      <spotLight
-        position={[-150, 160, -80]}
-        angle={0.45}
-        penumbra={0.8}
-        intensity={120}
-        color="#ff46d5"
-        distance={420}
-      />
-      <directionalLight
-        position={[80, 110, -20]}
-        intensity={0.45}
-        color="#8eb7ff"
-        castShadow
-        shadow-mapSize-width={2048}
-        shadow-mapSize-height={2048}
-        shadow-camera-far={700}
-        shadow-camera-left={-280}
-        shadow-camera-right={280}
-        shadow-camera-top={280}
-        shadow-camera-bottom={-280}
-      />
-      <ambientLight intensity={0.32} color="#5d79ff" />
-      <hemisphereLight args={["#12254f", "#05070d", 0.55]} />
+          <spotLight
+            position={[120, 180, 40]}
+            angle={0.5}
+            penumbra={0.7}
+            intensity={140}
+            color="#00dfff"
+            castShadow
+            distance={420}
+          />
+          <spotLight
+            position={[-150, 160, -80]}
+            angle={0.45}
+            penumbra={0.8}
+            intensity={120}
+            color="#ff46d5"
+            distance={420}
+          />
+          <directionalLight
+            position={[80, 110, -20]}
+            intensity={0.45}
+            color="#8eb7ff"
+            castShadow
+            shadow-mapSize-width={2048}
+            shadow-mapSize-height={2048}
+            shadow-camera-far={700}
+            shadow-camera-left={-280}
+            shadow-camera-right={280}
+            shadow-camera-top={280}
+            shadow-camera-bottom={-280}
+          />
+          <ambientLight intensity={0.32} color="#5d79ff" />
+          <hemisphereLight args={["#12254f", "#05070d", 0.55]} />
+        </>
+      ) : (
+        <>
+          <mesh position={[200, 120, -200]}>
+            <sphereGeometry args={[20, 32, 32]} />
+            <meshBasicMaterial color={isDesert ? "#ffd27a" : "#ffdd44"} />
+          </mesh>
+          <directionalLight
+            position={[200, 120, -200]}
+            intensity={1.2}
+            castShadow
+            shadow-mapSize-width={2048}
+            shadow-mapSize-height={2048}
+            shadow-camera-far={700}
+            shadow-camera-left={-280}
+            shadow-camera-right={280}
+            shadow-camera-top={280}
+            shadow-camera-bottom={-280}
+          />
+          <ambientLight intensity={0.4} />
+          <hemisphereLight
+            args={[
+              isDesert ? "#f4c98c" : "#87CEEB",
+              isDesert ? "#9b6741" : "#4a7c59",
+              0.5,
+            ]}
+          />
+        </>
+      )}
     </group>
   );
 }
