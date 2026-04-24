@@ -1,10 +1,9 @@
 import { useRef } from "react";
-import { useFrame, useThree } from "@react-three/fiber";
+import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { useGameStore } from "../store/gameStore";
 
 export function CameraController() {
-  const { camera } = useThree();
   const targetPosition = useRef(new THREE.Vector3());
   const targetLookAt = useRef(new THREE.Vector3());
   const currentLookAt = useRef(new THREE.Vector3());
@@ -18,7 +17,7 @@ export function CameraController() {
   const LOOK_AHEAD_DISTANCE = 10;
   const MAX_SPEED = 80;
 
-  useFrame(() => {
+  useFrame(({ camera }) => {
     if (!isPlaying) return;
 
     // Cast camera to PerspectiveCamera to access fov
