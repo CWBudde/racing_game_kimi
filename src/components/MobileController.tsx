@@ -132,6 +132,16 @@ export function MobileController() {
 
       {/* ---- Extra buttons: Boost & Handbrake ---- */}
       <div className="absolute right-28 bottom-28 flex flex-col gap-3 pointer-events-auto">
+        {/* Item */}
+        <button
+          className="w-16 h-16 rounded-full bg-cyan-500/50 backdrop-blur-sm border-2 border-cyan-300/60 flex items-center justify-center text-white text-xs font-bold active:bg-cyan-500/80 transition-colors"
+          onTouchStart={handleDown("e")}
+          onTouchEnd={handleUp("e")}
+          onTouchCancel={handleUp("e")}
+        >
+          <span className="leading-tight text-center">ITEM</span>
+        </button>
+
         {/* Boost */}
         <button
           className="w-16 h-16 rounded-full bg-purple-500/50 backdrop-blur-sm border-2 border-purple-300/60 flex items-center justify-center text-white text-xs font-bold active:bg-purple-500/80 transition-colors"

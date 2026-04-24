@@ -3,8 +3,8 @@ import { useFrame } from "@react-three/fiber";
 import { type RapierRigidBody } from "@react-three/rapier";
 import * as THREE from "three";
 import { useGameStore } from "../store/gameStore";
+import { getTrackLayout } from "./trackData";
 
-// Input state (exported so mobile controller can drive it)
 export const keys = {
   w: false,
   a: false,
@@ -12,9 +12,69 @@ export const keys = {
   d: false,
   space: false,
   shift: false,
+  e: false,
 };
 
-// Setup keyboard listeners
+type ControlState = {
+  throttle: number;
+  brake: number;
+  steer: number;
+  handbrake: boolean;
+  boost: boolean;
+  useItemBtn: boolean;
+};
+
+const GAMEPAD_DEADZONE = 0.18;
+
+const clamp = (value: number, min: number, max: number) =>
+  Math.min(Math.max(value, min), max);
+
+const applyDeadzone = (value: number, deadzone = GAMEPAD_DEADZONE) => {
+  if (Math.abs(value) < deadzone) return 0;
+  const normalized = (Math.abs(value) - deadzone) / (1 - deadzone);
+  return Math.sign(value) * normalized;
+};
+
+const readGamepadInput = (): ControlState => {
+  if (typeof navigator === "undefined" || !navigator.getGamepads) {
+    return {
+      throttle: 0,
+      brake: 0,
+      steer: 0,
+      handbrake: false,
+      boost: false,
+      useItemBtn: false,
+    };
+  }
+
+  for (const pad of navigator.getGamepads()) {
+    if (!pad?.connected) continue;
+
+    const stickSteer = applyDeadzone(pad.axes[0] ?? 0);
+    const dpadLeft = pad.buttons[14]?.pressed ? -1 : 0;
+    const dpadRight = pad.buttons[15]?.pressed ? 1 : 0;
+    const steer = dpadLeft + dpadRight || stickSteer;
+
+    return {
+      throttle: clamp(pad.buttons[7]?.value ?? 0, 0, 1),
+      brake: clamp(pad.buttons[6]?.value ?? 0, 0, 1),
+      steer: clamp(steer, -1, 1),
+      handbrake: !!pad.buttons[0]?.pressed,
+      boost: !!pad.buttons[5]?.pressed,
+      useItemBtn: !!pad.buttons[3]?.pressed,
+    };
+  }
+
+  return {
+    throttle: 0,
+    brake: 0,
+    steer: 0,
+    handbrake: false,
+    boost: false,
+    useItemBtn: false,
+  };
+};
+
 function useKeyboardInput() {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -25,6 +85,7 @@ function useKeyboardInput() {
       if (key === "d" || key === "arrowright") keys.d = true;
       if (key === " ") keys.space = true;
       if (key === "shift") keys.shift = true;
+      if (key === "e") keys.e = true;
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
@@ -35,6 +96,7 @@ function useKeyboardInput() {
       if (key === "d" || key === "arrowright") keys.d = false;
       if (key === " ") keys.space = false;
       if (key === "shift") keys.shift = false;
+      if (key === "e") keys.e = false;
     };
 
     window.addEventListener("keydown", handleKeyDown);
@@ -47,7 +109,6 @@ function useKeyboardInput() {
   }, []);
 }
 
-// Car physics constants
 const MAX_SPEED = 45;
 const MAX_REVERSE_SPEED = 15;
 const ACCELERATION = 8;
@@ -58,7 +119,6 @@ const MAX_STEERING_ANGLE = 0.8;
 const BOOST_MULTIPLIER = 1.5;
 export const CAR_MASS = 80;
 
-// Helper to extract Y-axis euler angle from a quaternion
 const getYawFromQuaternion = (q: {
   x: number;
   y: number;
@@ -71,7 +131,6 @@ const getYawFromQuaternion = (q: {
   );
 };
 
-// Main physics hook — owns all refs, game store access, and the useFrame loop
 export function useCarPhysics() {
   const carRef = useRef<RapierRigidBody>(null);
   const chassisRef = useRef<THREE.Group>(null);
@@ -81,77 +140,88 @@ export function useCarPhysics() {
   const {
     isPlaying,
     isPaused,
+    selectedTrackId,
     updateSpeed,
     updateCarPosition,
     updateCarRotation,
     boostAmount,
     updateBoost,
+    completeLap,
+    activeEffect,
+    updateActiveEffect,
   } = useGameStore();
 
+  const triggerItem = useGameStore((state) => state.useItem);
+
+  const trackProgressRef = useRef(0);
+  const hasPassedMidRef = useRef(false);
+  const useItemPressedRef = useRef(false);
+
   const [localSpeed, setLocalSpeed] = useState(0);
+  const trackPoints = getTrackLayout(selectedTrackId).points;
 
   useKeyboardInput();
 
-  // Physics update
   useFrame((_, delta) => {
     if (!carRef.current || !isPlaying || isPaused) return;
 
-    // Clamp delta to avoid physics explosions on tab-switch
     const dt = Math.min(delta, 0.05);
-
     const car = carRef.current;
     const currentVel = car.linvel();
     const currentRot = car.rotation();
-
-    // Extract yaw from quaternion
     const yaw = getYawFromQuaternion(currentRot);
 
-    // Forward/right vectors from yaw only (ignore any tilt in quaternion)
     const forward = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw));
     const right = new THREE.Vector3(Math.cos(yaw), 0, -Math.sin(yaw));
 
-    // Speed decomposition
     const forwardSpeed = currentVel.x * forward.x + currentVel.z * forward.z;
     const lateralSpeed = currentVel.x * right.x + currentVel.z * right.z;
     const speed = Math.sqrt(currentVel.x ** 2 + currentVel.z ** 2);
+    const gamepadInput = readGamepadInput();
+    const steeringInput =
+      gamepadInput.steer || (keys.a ? -1 : 0) + (keys.d ? 1 : 0);
+    const throttleInput = Math.max(keys.w ? 1 : 0, gamepadInput.throttle);
+    const brakeInput = Math.max(keys.s ? 1 : 0, gamepadInput.brake);
+    const handbrakeActive = keys.space || gamepadInput.handbrake;
+    const boostActive = keys.shift || gamepadInput.boost;
+    const useItemPressed = keys.e || gamepadInput.useItemBtn;
 
-    // --- Steering input (smooth, frame-rate independent) ---
-    let targetSteering = 0;
-    if (keys.a) targetSteering = -MAX_STEERING_ANGLE;
-    if (keys.d) targetSteering = MAX_STEERING_ANGLE;
+    if (useItemPressed && !useItemPressedRef.current) {
+      triggerItem();
+    }
+    useItemPressedRef.current = useItemPressed;
 
-    // Smooth steering with exponential interpolation
+    if (activeEffect) {
+      updateActiveEffect(dt);
+    }
+
+    const hasSpeedStar = activeEffect?.type === "speed-star";
+    const hasGripBoost = activeEffect?.type === "grip-boost";
+    const hasTurbo = activeEffect?.type === "turbo";
+    const effectiveMaxSpeed = hasSpeedStar ? MAX_SPEED * 1.5 : MAX_SPEED;
+
+    const targetSteering = steeringInput * MAX_STEERING_ANGLE;
     const steerLerp = 1 - Math.pow(0.001, dt);
     steeringRef.current += (targetSteering - steeringRef.current) * steerLerp;
     const currentSteering = steeringRef.current;
 
-    // --- DEBUG: log velocity when coasting ---
-    if (!keys.w && !keys.s && Math.abs(forwardSpeed) > 0.05) {
-      console.log(
-        `coast: fwdSpeed=${forwardSpeed.toFixed(3)} speed=${speed.toFixed(3)} vel=(${currentVel.x.toFixed(2)}, ${currentVel.z.toFixed(2)}) yaw=${yaw.toFixed(3)}`,
-      );
-    }
-
-    // --- Acceleration / braking ---
     let acceleration = 0;
 
-    if (keys.w) {
-      const boost = keys.shift && boostAmount > 0 ? BOOST_MULTIPLIER : 1;
-      if (keys.shift && boostAmount > 0) {
+    if (throttleInput > 0) {
+      const boost = boostActive && boostAmount > 0 ? BOOST_MULTIPLIER : 1;
+      if (boostActive && boostAmount > 0) {
         updateBoost(boostAmount - dt * 20);
       }
-      if (forwardSpeed < MAX_SPEED * boost) {
-        acceleration = ACCELERATION * boost;
+      if (forwardSpeed < effectiveMaxSpeed * boost) {
+        acceleration = ACCELERATION * boost * throttleInput;
       }
-    } else if (keys.s) {
+    } else if (brakeInput > 0) {
       if (forwardSpeed > 0.5) {
-        acceleration = -BRAKE_FORCE;
+        acceleration = -BRAKE_FORCE * brakeInput;
       } else if (forwardSpeed > -MAX_REVERSE_SPEED) {
-        acceleration = -ACCELERATION * 0.5;
+        acceleration = -ACCELERATION * 0.5 * brakeInput;
       }
     } else {
-      // Coasting — no keys pressed
-      // Directly damp velocity (stable, can never overshoot zero)
       const dampFactor = Math.exp(-DECELERATION * 0.15 * dt);
       car.setLinvel(
         {
@@ -163,7 +233,6 @@ export function useCarPhysics() {
       );
     }
 
-    // Apply acceleration as impulse along forward direction
     if (Math.abs(acceleration) > 0.1) {
       const forceMag = acceleration * dt * CAR_MASS;
       car.applyImpulse(
@@ -172,14 +241,19 @@ export function useCarPhysics() {
       );
     }
 
-    // --- Steering via angular velocity (lets Rapier handle collision response) ---
+    if (hasTurbo) {
+      const turboForce = ACCELERATION * 4 * dt * CAR_MASS;
+      car.applyImpulse(
+        { x: forward.x * turboForce, y: 0, z: forward.z * turboForce },
+        true,
+      );
+    }
+
     if (
       Math.abs(currentSteering) > 0.01 &&
-      (Math.abs(speed) > 0.1 || keys.w || keys.s)
+      (Math.abs(speed) > 0.1 || throttleInput > 0 || brakeInput > 0)
     ) {
-      // Invert steering when reversing
       const steerSign = forwardSpeed >= 0 ? 1 : -1;
-      // Turn rate scales with speed: ramps up from a minimum, reduces at high speed
       const minTurnRate = 0.15;
       const speedFactor = Math.max(
         Math.min(speed / 15, 1) * Math.max(1 - speed / 120, 0.3),
@@ -189,15 +263,12 @@ export function useCarPhysics() {
         -currentSteering * STEERING_SPEED * speedFactor * steerSign;
       car.setAngvel({ x: 0, y: angularVelY, z: 0 }, true);
     } else {
-      // No steering input — stop angular rotation
       car.setAngvel({ x: 0, y: 0, z: 0 }, true);
     }
 
-    // --- Lateral grip: gently redirect velocity toward forward direction ---
-    // Instead of hard-setting linvel, apply a corrective impulse
     if (Math.abs(lateralSpeed) > 0.2) {
-      const gripStrength = keys.space ? 0.4 : 0.85; // handbrake reduces grip
-      // Apply a lateral impulse opposing the slide
+      const baseGrip = hasGripBoost ? 0.95 : 0.85;
+      const gripStrength = handbrakeActive ? 0.4 : baseGrip;
       const correctionForce = -lateralSpeed * gripStrength * CAR_MASS * dt;
       car.applyImpulse(
         { x: right.x * correctionForce, y: 0, z: right.z * correctionForce },
@@ -205,22 +276,21 @@ export function useCarPhysics() {
       );
     }
 
-    // Handbrake: also slow down overall
-    if (keys.space) {
-      const dampedVel = {
-        x: currentVel.x * (1 - 1.5 * dt),
-        y: currentVel.y,
-        z: currentVel.z * (1 - 1.5 * dt),
-      };
-      car.setLinvel(dampedVel, true);
+    if (handbrakeActive) {
+      car.setLinvel(
+        {
+          x: currentVel.x * (1 - 1.5 * dt),
+          y: currentVel.y,
+          z: currentVel.z * (1 - 1.5 * dt),
+        },
+        true,
+      );
     }
 
-    // --- Keep car upright (correct any pitch/roll from collisions) ---
     const uprightRot = new THREE.Quaternion().setFromAxisAngle(
       new THREE.Vector3(0, 1, 0),
       yaw,
     );
-    // Slerp toward upright to avoid snapping
     const currentQuat = new THREE.Quaternion(
       currentRot.x,
       currentRot.y,
@@ -238,7 +308,31 @@ export function useCarPhysics() {
       true,
     );
 
-    // --- Update game state ---
+    {
+      const pos = car.translation();
+      let minDist2 = Infinity;
+      let closestIdx = 0;
+      for (let i = 0; i < trackPoints.length; i++) {
+        const dx = trackPoints[i].x - pos.x;
+        const dz = trackPoints[i].z - pos.z;
+        const d2 = dx * dx + dz * dz;
+        if (d2 < minDist2) {
+          minDist2 = d2;
+          closestIdx = i;
+        }
+      }
+      const progress = closestIdx / trackPoints.length;
+      const prevProgress = trackProgressRef.current;
+
+      if (progress > 0.4 && progress < 0.6) hasPassedMidRef.current = true;
+
+      if (prevProgress > 0.85 && progress < 0.15 && hasPassedMidRef.current) {
+        completeLap();
+        hasPassedMidRef.current = false;
+      }
+      trackProgressRef.current = progress;
+    }
+
     const pos = car.translation();
     const finalYaw = getYawFromQuaternion(car.rotation());
     const speedKmh = Math.abs(forwardSpeed) * 3.6;
@@ -247,12 +341,10 @@ export function useCarPhysics() {
     updateCarPosition([pos.x, pos.y, pos.z]);
     updateCarRotation([0, finalYaw, 0]);
 
-    // Regenerate boost slowly
-    if (!keys.shift && boostAmount < 100) {
+    if (!boostActive && boostAmount < 100) {
       updateBoost(boostAmount + dt * 5);
     }
 
-    // --- Animate wheels ---
     if (wheelsRef.current) {
       wheelsRef.current.children.forEach((wheel, i) => {
         wheel.rotation.x += forwardSpeed * dt * 0.5;
@@ -263,7 +355,6 @@ export function useCarPhysics() {
       });
     }
 
-    // --- Chassis tilt (cosmetic only) ---
     if (chassisRef.current) {
       const tiltX = Math.min(Math.max(-acceleration * 0.003, -0.08), 0.08);
       const tiltZ = Math.min(

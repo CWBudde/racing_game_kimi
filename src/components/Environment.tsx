@@ -1,8 +1,97 @@
-import { useMemo, useRef } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { useFrame } from "@react-three/fiber";
-import { RigidBody } from "@react-three/rapier";
+import { CuboidCollider, RigidBody } from "@react-three/rapier";
 import * as THREE from "three";
 import { getTrackLayout } from "./trackData";
+import { ITEM_POOLS, type ItemType, useGameStore } from "../store/gameStore";
+
+function Tree({
+  position,
+  scale = 1,
+}: {
+  position: [number, number, number];
+  scale?: number;
+}) {
+  return (
+    <RigidBody type="fixed" position={position} colliders={false}>
+      <mesh castShadow position={[0, 1.5 * scale, 0]}>
+        <cylinderGeometry args={[0.3 * scale, 0.4 * scale, 3 * scale, 8]} />
+        <meshStandardMaterial color="#8B4513" />
+      </mesh>
+      <CuboidCollider
+        args={[0.3 * scale, 1.5 * scale, 0.3 * scale]}
+        position={[0, 1.5 * scale, 0]}
+      />
+      <mesh castShadow position={[0, 3.5 * scale, 0]}>
+        <coneGeometry args={[2 * scale, 2.5 * scale, 8]} />
+        <meshStandardMaterial color="#228B22" />
+      </mesh>
+      <mesh castShadow position={[0, 4.8 * scale, 0]}>
+        <coneGeometry args={[1.5 * scale, 2 * scale, 8]} />
+        <meshStandardMaterial color="#32CD32" />
+      </mesh>
+      <mesh castShadow position={[0, 5.8 * scale, 0]}>
+        <coneGeometry args={[0.8 * scale, 1.5 * scale, 8]} />
+        <meshStandardMaterial color="#90EE90" />
+      </mesh>
+    </RigidBody>
+  );
+}
+
+function Rock({
+  position,
+  scale = 1,
+}: {
+  position: [number, number, number];
+  scale?: number;
+}) {
+  return (
+    <RigidBody type="fixed" position={position} colliders={false}>
+      <mesh castShadow>
+        <dodecahedronGeometry args={[scale, 0]} />
+        <meshStandardMaterial color="#808080" roughness={0.9} />
+      </mesh>
+      <CuboidCollider args={[scale * 0.8, scale * 0.6, scale * 0.8]} />
+    </RigidBody>
+  );
+}
+
+function Cloud({
+  position,
+  scale = 1,
+}: {
+  position: [number, number, number];
+  scale?: number;
+}) {
+  const cloudRef = useRef<THREE.Group>(null);
+
+  useFrame(({ clock }) => {
+    if (!cloudRef.current) return;
+    cloudRef.current.position.x +=
+      Math.sin(clock.getElapsedTime() * 0.1 + position[0]) * 0.01;
+  });
+
+  return (
+    <group ref={cloudRef} position={position}>
+      <mesh>
+        <sphereGeometry args={[2 * scale, 16, 16]} />
+        <meshStandardMaterial color="#ffffff" transparent opacity={0.8} />
+      </mesh>
+      <mesh position={[1.5 * scale, 0.3 * scale, 0]}>
+        <sphereGeometry args={[1.5 * scale, 16, 16]} />
+        <meshStandardMaterial color="#ffffff" transparent opacity={0.8} />
+      </mesh>
+      <mesh position={[-1.5 * scale, 0.2 * scale, 0]}>
+        <sphereGeometry args={[1.3 * scale, 16, 16]} />
+        <meshStandardMaterial color="#ffffff" transparent opacity={0.8} />
+      </mesh>
+      <mesh position={[0, 0.8 * scale, 0.5 * scale]}>
+        <sphereGeometry args={[1.2 * scale, 16, 16]} />
+        <meshStandardMaterial color="#ffffff" transparent opacity={0.8} />
+      </mesh>
+    </group>
+  );
+}
 
 function NeonTower({
   position,
@@ -174,38 +263,124 @@ function Drone({
   );
 }
 
-function ItemBox({ position, accent }: { position: [number, number, number]; accent: string }) {
-  const boxRef = useRef<THREE.Group>(null);
+const RESPAWN_TIME = 5;
 
-  useFrame(({ clock }) => {
+function seededRandom(seed: number): number {
+  const value = Math.sin(seed * 12.9898) * 43758.5453;
+  return value - Math.floor(value);
+}
+
+function tooCloseToTrack(
+  trackPoints: THREE.Vector3[],
+  x: number,
+  z: number,
+  clearance: number,
+): boolean {
+  const c2 = clearance * clearance;
+  for (const pt of trackPoints) {
+    const dx = pt.x - x;
+    const dz = pt.z - z;
+    if (dx * dx + dz * dz < c2) return true;
+  }
+  return false;
+}
+
+function ItemBox({
+  position,
+  accent,
+  itemPool,
+  neon,
+}: {
+  position: [number, number, number];
+  accent: string;
+  itemPool: ItemType[];
+  neon: boolean;
+}) {
+  const boxRef = useRef<THREE.Group>(null);
+  const [collected, setCollected] = useState(false);
+  const respawnTimerRef = useRef(0);
+  const collectItem = useGameStore((state) => state.collectItem);
+  const hasItem = useGameStore((state) => state.hasItem);
+
+  const handleIntersection = useCallback(() => {
+    if (collected || hasItem) return;
+    const item = itemPool[Math.floor(Math.random() * itemPool.length)];
+    collectItem(item);
+    setCollected(true);
+    respawnTimerRef.current = RESPAWN_TIME;
+  }, [collected, collectItem, hasItem, itemPool]);
+
+  useFrame(({ clock }, delta) => {
+    if (collected) {
+      respawnTimerRef.current -= delta;
+      if (respawnTimerRef.current <= 0) {
+        setCollected(false);
+      }
+      return;
+    }
+
     if (!boxRef.current) return;
     boxRef.current.rotation.y = clock.getElapsedTime() * 1.8;
     boxRef.current.position.y = Math.sin(clock.getElapsedTime() * 2.6) * 0.35;
   });
 
+  if (collected) return null;
+
   return (
-    <RigidBody type="fixed" position={position} sensor colliders={false}>
+    <RigidBody
+      type="fixed"
+      position={position}
+      sensor
+      colliders={false}
+      onIntersectionEnter={handleIntersection}
+    >
       <group ref={boxRef}>
         <mesh castShadow>
           <boxGeometry args={[1.55, 1.55, 1.55]} />
           <meshStandardMaterial
-            color="#0d1730"
+            color={neon ? "#0d1730" : "#ffdd00"}
             emissive={accent}
-            emissiveIntensity={0.95}
-            metalness={0.6}
+            emissiveIntensity={neon ? 0.95 : 0.3}
+            metalness={neon ? 0.6 : 0.1}
           />
         </mesh>
-        <mesh scale={1.22}>
-          <boxGeometry args={[1.55, 1.55, 1.55]} />
-          <meshStandardMaterial
-            color="#8efbff"
-            emissive={accent}
-            emissiveIntensity={1.15}
-            transparent
-            opacity={0.15}
-          />
-        </mesh>
+        {neon ? (
+          <mesh scale={1.22}>
+            <boxGeometry args={[1.55, 1.55, 1.55]} />
+            <meshStandardMaterial
+              color="#8efbff"
+              emissive={accent}
+              emissiveIntensity={1.15}
+              transparent
+              opacity={0.15}
+            />
+          </mesh>
+        ) : (
+          <mesh position={[0, 0, 0.79]}>
+            <planeGeometry args={[0.8, 0.8]} />
+            <meshBasicMaterial color="#000000">
+              <canvasTexture
+                attach="map"
+                image={(() => {
+                  const canvas = document.createElement("canvas");
+                  canvas.width = 64;
+                  canvas.height = 64;
+                  const ctx = canvas.getContext("2d")!;
+                  ctx.fillStyle = "#ffdd00";
+                  ctx.fillRect(0, 0, 64, 64);
+                  ctx.fillStyle = "#000000";
+                  ctx.font = "bold 45px Arial";
+                  ctx.textAlign = "center";
+                  ctx.textBaseline = "middle";
+                  ctx.fillText("?", 32, 32);
+                  return canvas;
+                })()}
+              />
+            </meshBasicMaterial>
+          </mesh>
+        )}
       </group>
+      <CuboidCollider args={[0.9, 0.9, 0.9]} sensor />
     </RigidBody>
   );
 }
@@ -220,6 +395,8 @@ export function Environment({ trackId }: EnvironmentProps) {
   const { left, right } = layout.sides;
   const isNeon = layout.definition.theme === "neon";
   const isDesert = layout.definition.theme === "desert";
+  const itemPool = ITEM_POOLS[trackId] ?? ITEM_POOLS["coastal-gp"];
+  const trackClearance = layout.width * 0.5 + 16;
 
   const towers = useMemo(() => {
     const positions: {
@@ -325,8 +502,97 @@ export function Environment({ trackId }: EnvironmentProps) {
     return positions;
   }, [trackPoints]);
 
+  const trees = useMemo(() => {
+    const positions: { position: [number, number, number]; scale: number }[] = [];
+    if (isNeon || isDesert) return positions;
+
+    for (let i = 0; i < 60; i++) {
+      const angle = (i / 60) * Math.PI * 2 + seededRandom(i + 11) * 0.4;
+      const radius = 80 + seededRandom(i + 37) * 60;
+      const x = Math.cos(angle) * radius;
+      const z = Math.sin(angle) * radius;
+      if (tooCloseToTrack(trackPoints, x, z, trackClearance)) continue;
+      positions.push({
+        position: [x, 0, z],
+        scale: 0.8 + seededRandom(i + 71) * 0.6,
+      });
+    }
+
+    for (let i = 0; i < 40; i++) {
+      const angle = (i / 40) * Math.PI * 2 + seededRandom(i + 109) * 0.6;
+      const radius = 160 + seededRandom(i + 149) * 200;
+      positions.push({
+        position: [Math.cos(angle) * radius, 0, Math.sin(angle) * radius],
+        scale: 1 + seededRandom(i + 181),
+      });
+    }
+
+    return positions;
+  }, [isDesert, isNeon, trackClearance, trackPoints]);
+
+  const rocks = useMemo(() => {
+    const positions: { position: [number, number, number]; scale: number }[] = [];
+    if (isNeon) return positions;
+
+    const rockCount = isDesert ? 90 : 50;
+    for (let i = 0; i < rockCount; i++) {
+      const angle = (i / rockCount) * Math.PI * 2 + seededRandom(i + 223) * 0.8;
+      const radius = isDesert
+        ? 90 + seededRandom(i + 269) * 260
+        : 70 + seededRandom(i + 307) * 180;
+      const x = Math.cos(angle) * radius;
+      const z = Math.sin(angle) * radius;
+      if (tooCloseToTrack(trackPoints, x, z, trackClearance)) continue;
+      positions.push({
+        position: [x, 0.5, z],
+        scale: isDesert
+          ? 0.7 + seededRandom(i + 349) * 1.8
+          : 0.5 + seededRandom(i + 389) * 1.2,
+      });
+    }
+
+    return positions;
+  }, [isDesert, isNeon, trackClearance, trackPoints]);
+
+  const clouds = useMemo(() => {
+    const positions: { position: [number, number, number]; scale: number }[] = [];
+    if (isNeon) return positions;
+
+    for (let i = 0; i < 16; i++) {
+      positions.push({
+        position: [
+          (seededRandom(i + 431) - 0.5) * 800,
+          40 + seededRandom(i + 467) * 40,
+          (seededRandom(i + 503) - 0.5) * 800,
+        ],
+        scale: 1 + seededRandom(i + 541) * 2,
+      });
+    }
+
+    return positions;
+  }, [isNeon]);
+
   return (
     <group>
+      {!isNeon &&
+        trees.map((tree, i) => (
+          <Tree key={`tree-${i}`} position={tree.position} scale={tree.scale} />
+        ))}
+
+      {!isNeon &&
+        rocks.map((rock, i) => (
+          <Rock key={`rock-${i}`} position={rock.position} scale={rock.scale} />
+        ))}
+
+      {!isNeon &&
+        clouds.map((cloud, i) => (
+          <Cloud
+            key={`cloud-${i}`}
+            position={cloud.position}
+            scale={cloud.scale}
+          />
+        ))}
+
       {isNeon &&
         towers.map((tower, i) => (
           <NeonTower
@@ -392,7 +658,13 @@ export function Environment({ trackId }: EnvironmentProps) {
         ))}
 
       {itemBoxes.map((item, i) => (
-        <ItemBox key={`item-${i}`} position={item.position} accent={item.accent} />
+        <ItemBox
+          key={`item-${i}`}
+          position={item.position}
+          accent={item.accent}
+          itemPool={itemPool}
+          neon={isNeon}
+        />
       ))}
 
       {isNeon &&
