@@ -2,68 +2,66 @@ import { useEffect, useRef, useState } from "react";
 import { TRACKS } from "./trackData";
 import { ITEM_INFO, useGameStore } from "../store/gameStore";
 
+const START_SIGNAL_STEPS = 6;
+const START_SIGNAL_STEP_MS = 620;
+
 function CountdownOverlay() {
   const startGame = useGameStore((state) => state.startGame);
   const [phase, setPhase] = useState(0);
 
   useEffect(() => {
-    const timings = [1000, 1000, 1000, 700];
     let current = 0;
     let timeoutId: ReturnType<typeof setTimeout>;
 
     const tick = () => {
       current++;
-      if (current < 4) {
+      if (current < START_SIGNAL_STEPS) {
         setPhase(current);
-        timeoutId = setTimeout(tick, timings[current]);
+        timeoutId = setTimeout(tick, START_SIGNAL_STEP_MS);
       } else {
         startGame();
       }
     };
 
-    timeoutId = setTimeout(tick, timings[0]);
+    timeoutId = setTimeout(tick, START_SIGNAL_STEP_MS);
     return () => clearTimeout(timeoutId);
   }, [startGame]);
 
-  const redOn = phase === 0 || phase === 1;
-  const yellowOn = phase === 1 || phase === 2;
-  const greenOn = phase === 3;
-  const label = phase === 3 ? "GO!" : String(3 - phase);
-  const labelColor = phase === 3 ? "#22c55e" : phase === 2 ? "#eab308" : "#ef4444";
+  const isGo = phase === START_SIGNAL_STEPS - 1;
+  const redLightsOn = isGo ? 0 : phase + 1;
+  const greenLightsOn = isGo ? 5 : 0;
 
   return (
-    <div className="absolute inset-0 flex items-center justify-center z-50 pointer-events-none">
-      <div className="flex flex-col items-center gap-6">
-        <div className="bg-gray-900 border-4 border-gray-700 rounded-2xl p-5 flex flex-col gap-4 shadow-2xl">
-          <div
-            className="w-20 h-20 rounded-full border-4 border-gray-700 transition-all duration-150"
-            style={{
-              background: redOn ? "#ef4444" : "#3f0a0a",
-              boxShadow: redOn ? "0 0 32px 8px #ef444488" : "none",
-            }}
-          />
-          <div
-            className="w-20 h-20 rounded-full border-4 border-gray-700 transition-all duration-150"
-            style={{
-              background: yellowOn ? "#eab308" : "#3b2a00",
-              boxShadow: yellowOn ? "0 0 32px 8px #eab30888" : "none",
-            }}
-          />
-          <div
-            className="w-20 h-20 rounded-full border-4 border-gray-700 transition-all duration-150"
-            style={{
-              background: greenOn ? "#22c55e" : "#052010",
-              boxShadow: greenOn ? "0 0 32px 8px #22c55e88" : "none",
-            }}
-          />
+    <div className="absolute inset-0 flex items-start justify-center z-50 pointer-events-none pt-10 md:pt-14">
+      <div className="flex flex-col items-center gap-4">
+        <div className="bg-gray-950 border-4 border-gray-700 rounded-xl p-4 shadow-2xl">
+          <div className="flex gap-3">
+            {Array.from({ length: 5 }, (_, index) => {
+              const redActive = index < redLightsOn;
+              const greenActive = index < greenLightsOn;
+              const color = greenActive ? "#22c55e" : redActive ? "#ef4444" : "#140b0b";
+              const shadow = greenActive
+                ? "0 0 24px 7px #22c55e99"
+                : redActive
+                  ? "0 0 24px 7px #ef444499"
+                  : "none";
+
+              return (
+                <div
+                  key={index}
+                  className="w-12 h-12 md:w-16 md:h-16 rounded-full border-4 border-gray-800 transition-all duration-150"
+                  style={{ background: color, boxShadow: shadow }}
+                />
+              );
+            })}
+          </div>
         </div>
 
-        <div
-          className="text-8xl font-black drop-shadow-lg transition-all duration-150"
-          style={{ color: labelColor, textShadow: `0 0 40px ${labelColor}` }}
-        >
-          {label}
-        </div>
+        {isGo && (
+          <div className="text-6xl md:text-8xl font-black text-green-400 drop-shadow-lg transition-all duration-150 [text-shadow:0_0_40px_#22c55e]">
+            GO
+          </div>
+        )}
       </div>
     </div>
   );
