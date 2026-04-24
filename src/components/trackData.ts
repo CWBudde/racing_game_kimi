@@ -143,7 +143,7 @@ export const TRACKS: TrackDefinition[] = TRACK_SOURCES.map((source) => ({
   theme: source.theme,
 }));
 
-export const DEFAULT_TRACK_ID = "neon-district";
+export const DEFAULT_TRACK_ID = "coastal-gp";
 export const TRACK_WIDTH = TRACK_SOURCES[0].width;
 
 const generateTrackPoints = (
