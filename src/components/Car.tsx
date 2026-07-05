@@ -13,6 +13,7 @@ export function Car({ position = [0, 2, 0] }: CarProps) {
       ref={carRef}
       position={position}
       mass={CAR_MASS}
+      userData={{ isPlayer: true }}
       colliders={false}
       linearDamping={0.3}
       angularDamping={0.8}

@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { subscribeWithSelector } from "zustand/middleware";
 import { DEFAULT_TRACK_ID, getTrackStart, TRACKS } from "../components/trackData";
+import { TOP_SPEED_KMH } from "../components/carConstants";
 
 const HIGHSCORE_STORAGE_KEY = "kart-racing-highscores";
 const initialTrack = TRACKS.find((track) => track.id === DEFAULT_TRACK_ID) ?? TRACKS[0];
@@ -9,41 +10,75 @@ const initialTrackStart = getTrackStart(initialTrackId);
 
 export interface HighScoreEntry {
   id: string;
+  trackId: string;
   totalTime: number;
   bestLapTime: number;
   achievedAt: string;
 }
 
-const loadHighScores = (): HighScoreEntry[] => {
-  if (typeof window === "undefined") return [];
+// High scores are keyed by track — different tracks have different lengths and
+// lap counts, so a single combined board would bury slower-track times forever.
+export type HighScoresByTrack = Record<string, HighScoreEntry[]>;
+
+const MAX_SCORES_PER_TRACK = 5;
+
+const isValidEntry = (entry: unknown): entry is Omit<HighScoreEntry, "trackId"> =>
+  !!entry &&
+  typeof (entry as HighScoreEntry).id === "string" &&
+  typeof (entry as HighScoreEntry).totalTime === "number" &&
+  typeof (entry as HighScoreEntry).bestLapTime === "number" &&
+  typeof (entry as HighScoreEntry).achievedAt === "string";
+
+const sortTrackScores = (entries: HighScoreEntry[]): HighScoreEntry[] =>
+  [...entries]
+    .sort((a, b) => a.totalTime - b.totalTime)
+    .slice(0, MAX_SCORES_PER_TRACK);
+
+const loadHighScores = (): HighScoresByTrack => {
+  if (typeof window === "undefined") return {};
 
   try {
     const raw = window.localStorage.getItem(HIGHSCORE_STORAGE_KEY);
-    if (!raw) return [];
+    if (!raw) return {};
 
     const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
 
-    return parsed
-      .filter(
-        (entry): entry is HighScoreEntry =>
-          !!entry &&
-          typeof entry.id === "string" &&
-          typeof entry.totalTime === "number" &&
-          typeof entry.bestLapTime === "number" &&
-          typeof entry.achievedAt === "string",
-      )
-      .sort((a, b) => a.totalTime - b.totalTime)
-      .slice(0, 5);
+    // Legacy format: a flat array with no track info. It can't be attributed to
+    // a specific track, so migrate it under the default track id.
+    if (Array.isArray(parsed)) {
+      const migrated = parsed
+        .filter(isValidEntry)
+        .map((entry) => ({ ...entry, trackId: DEFAULT_TRACK_ID }));
+      return migrated.length
+        ? { [DEFAULT_TRACK_ID]: sortTrackScores(migrated) }
+        : {};
+    }
+
+    if (!parsed || typeof parsed !== "object") return {};
+
+    const byTrack: HighScoresByTrack = {};
+    for (const [trackId, entries] of Object.entries(parsed)) {
+      if (!Array.isArray(entries)) continue;
+      const valid = entries
+        .filter(isValidEntry)
+        .map((entry) => ({ ...entry, trackId }));
+      if (valid.length) byTrack[trackId] = sortTrackScores(valid);
+    }
+    return byTrack;
   } catch {
-    return [];
+    return {};
   }
 };
 
-const saveHighScores = (entries: HighScoreEntry[]) => {
+const saveHighScores = (byTrack: HighScoresByTrack) => {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(HIGHSCORE_STORAGE_KEY, JSON.stringify(entries));
+  window.localStorage.setItem(HIGHSCORE_STORAGE_KEY, JSON.stringify(byTrack));
 };
+
+const getTrackScores = (
+  byTrack: HighScoresByTrack,
+  trackId: string,
+): HighScoreEntry[] => byTrack[trackId] ?? [];
 
 export type ItemType =
   | "boost-refill"
@@ -90,7 +125,8 @@ export interface GameState {
   currentLapTime: number;
   totalRaceTime: number;
   bestLapTime: number | null;
-  highScores: HighScoreEntry[];
+  highScoresByTrack: HighScoresByTrack;
+  highScores: HighScoreEntry[]; // board for the currently selected track
   lastRaceRank: number | null;
 
   // Car stats
@@ -152,6 +188,8 @@ const resetRaceState = (trackId: string) => {
   };
 };
 
+const initialHighScores = loadHighScores();
+
 export const useGameStore = create<GameState>()(
   subscribeWithSelector((set, get) => ({
     // Initial state
@@ -168,11 +206,12 @@ export const useGameStore = create<GameState>()(
     currentLapTime: 0,
     totalRaceTime: 0,
     bestLapTime: null,
-    highScores: loadHighScores(),
+    highScoresByTrack: initialHighScores,
+    highScores: getTrackScores(initialHighScores, initialTrackId),
     lastRaceRank: null,
 
     speed: 0,
-    maxSpeed: 80,
+    maxSpeed: TOP_SPEED_KMH,
     boostAmount: 100,
     hasItem: false,
     currentItem: null,
@@ -205,10 +244,11 @@ export const useGameStore = create<GameState>()(
       const track = TRACKS.find((entry) => entry.id === trackId);
       if (!track) return;
 
-      set({
+      set((state) => ({
         selectedTrackId: trackId,
         ...resetRaceState(trackId),
-      });
+        highScores: getTrackScores(state.highScoresByTrack, trackId),
+      }));
     },
 
     beginCountdown: () =>
@@ -252,25 +292,33 @@ export const useGameStore = create<GameState>()(
         : state.currentLapTime;
 
       if (state.lap >= state.totalLaps) {
+        const trackId = state.selectedTrackId;
         const entry: HighScoreEntry = {
           id: `${Date.now()}`,
+          trackId,
           totalTime: state.totalRaceTime,
           bestLapTime: newBestLap,
           achievedAt: new Date().toISOString(),
         };
-        const highScores = [...state.highScores, entry]
-          .sort((a, b) => a.totalTime - b.totalTime)
-          .slice(0, 5);
-        saveHighScores(highScores);
+        const trackScores = sortTrackScores([
+          ...getTrackScores(state.highScoresByTrack, trackId),
+          entry,
+        ]);
+        const highScoresByTrack = {
+          ...state.highScoresByTrack,
+          [trackId]: trackScores,
+        };
+        saveHighScores(highScoresByTrack);
 
         set({
           gameOver: true,
           isPlaying: false,
           lapTimes: newLapTimes,
           bestLapTime: newBestLap,
-          highScores,
+          highScoresByTrack,
+          highScores: trackScores,
           lastRaceRank:
-            highScores.findIndex((score) => score.id === entry.id) + 1 || null,
+            trackScores.findIndex((score) => score.id === entry.id) + 1 || null,
         });
       } else {
         set({
@@ -292,8 +340,10 @@ export const useGameStore = create<GameState>()(
       }
     },
 
-    updateSpeed: (speed) =>
-      set({ speed: Math.max(0, Math.min(speed, get().maxSpeed)) }),
+    // Report the true km/h — the physics already caps velocity, so no upper
+    // clamp here (speed-star + boost can legitimately exceed maxSpeed, which is
+    // only the speedometer's full-scale). Clamping would understate the number.
+    updateSpeed: (speed) => set({ speed: Math.max(0, speed) }),
 
     updateBoost: (amount) =>
       set({ boostAmount: Math.max(0, Math.min(100, amount)) }),

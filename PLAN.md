@@ -210,11 +210,11 @@ a handful of correctness bugs, a costly state-management pattern, and missing ra
 ## 3. Phased roadmap
 
 ### Phase 0 — Correctness (make the game honest) 🔴
-- [ ] B1: Fix item sensor height + filter collector to the player body
-- [ ] B2: Sequential checkpoint gates + start/finish sensor for lap validation
-- [ ] B3: Speedometer range/clamp fix
-- [ ] B4: Per-track leaderboards
-- [ ] B5: Delta-time race timer
+- [x] B1: Fix item sensor height + filter collector to the player body
+- [x] B2: Sequential checkpoint gates + start/finish sensor for lap validation
+- [x] B3: Speedometer range/clamp fix
+- [x] B4: Per-track leaderboards
+- [x] B5: Delta-time race timer
 - [ ] B6: Honest rank labeling (until G2 lands)
 - [ ] B7/M5: Key reset on blur/pause
 - [ ] B8: Respawn key + fall-off auto-reset

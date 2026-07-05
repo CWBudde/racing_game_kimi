@@ -1,5 +1,5 @@
 import { useEffect, useCallback } from "react";
-import { Canvas } from "@react-three/fiber";
+import { Canvas, useFrame } from "@react-three/fiber";
 import { Physics } from "@react-three/rapier";
 import { Stars } from "@react-three/drei";
 import { Track } from "./components/Track";
@@ -14,22 +14,24 @@ import { useGameStore } from "./store/gameStore";
 import "./App.css";
 
 function GameScene() {
-  const { isPlaying, isPaused, updateLapTime, selectedTrackId } = useGameStore();
+  const { updateLapTime, selectedTrackId } = useGameStore();
   const trackLayout = getTrackLayout(selectedTrackId);
   const playerStart = getTrackStart(selectedTrackId);
   const isNeon = trackLayout.definition.theme === "neon";
   const isDesert = trackLayout.definition.theme === "desert";
 
-  // Update lap time
-  useEffect(() => {
-    if (!isPlaying || isPaused) return;
-
-    const interval = setInterval(() => {
-      updateLapTime(0.1);
-    }, 100);
-
-    return () => clearInterval(interval);
-  }, [isPlaying, isPaused, updateLapTime]);
+  // Drive the race/lap timer from the render clock — the same one the physics
+  // uses — instead of a setInterval, which is throttled in background tabs and
+  // never fires at exactly 100 ms, so the centisecond HUD drifts. Flush every
+  // frame (updateLapTime self-guards on play/pause) so currentLapTime is always
+  // current when a lap/finish gate calls completeLap; batching would leave up to
+  // one tick unrecorded and under-report the split. The store is already written
+  // per frame by the physics, so this adds no meaningful cost. Pathological gaps
+  // (a backgrounded tab, where nothing simulates) are capped so they aren't
+  // counted as race time.
+  useFrame((_, delta) => {
+    updateLapTime(Math.min(delta, 0.1));
+  });
 
   return (
     <>
