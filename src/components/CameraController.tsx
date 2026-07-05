@@ -2,28 +2,27 @@ import { useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { useGameStore } from "../store/gameStore";
+import { carTransform } from "../store/carTransform";
 import { getTrackStart } from "./trackData";
+import { TOP_SPEED_KMH } from "./carConstants";
 
 export function CameraController() {
   const targetPosition = useRef(new THREE.Vector3());
   const targetLookAt = useRef(new THREE.Vector3());
   const currentLookAt = useRef(new THREE.Vector3());
 
-  const {
-    carPosition,
-    carRotation,
-    speed,
-    isPlaying,
-    isCountingDown,
-    selectedTrackId,
-  } = useGameStore();
+  // Only low-frequency flags come from the store (selectors → no per-frame
+  // re-render). The car pose and speed are read straight from the transient
+  // module inside the frame loop.
+  const isPlaying = useGameStore((state) => state.isPlaying);
+  const isCountingDown = useGameStore((state) => state.isCountingDown);
+  const selectedTrackId = useGameStore((state) => state.selectedTrackId);
 
   // Camera settings
   const CAMERA_HEIGHT = 8;
   const CAMERA_DISTANCE = 15;
   const CAMERA_LAG = 0.08;
   const LOOK_AHEAD_DISTANCE = 10;
-  const MAX_SPEED = 80;
 
   useFrame(({ camera }) => {
     if (!isPlaying && !isCountingDown) return;
@@ -56,8 +55,12 @@ export function CameraController() {
     }
 
     // Calculate desired camera position behind the car
-    const carRot = carRotation[1];
-    const carPos = new THREE.Vector3(...carPosition);
+    const carRot = carTransform.yaw;
+    const carPos = new THREE.Vector3(
+      carTransform.x,
+      carTransform.y,
+      carTransform.z,
+    );
 
     // Calculate offset based on car rotation
     const offsetX = Math.sin(carRot) * CAMERA_DISTANCE;
@@ -89,7 +92,8 @@ export function CameraController() {
     camera.lookAt(currentLookAt.current);
 
     // Add slight FOV effect based on speed
-    const targetFOV = 60 + (speed / MAX_SPEED) * 15;
+    const speedRatio = Math.min(carTransform.speedKmh / TOP_SPEED_KMH, 1);
+    const targetFOV = 60 + speedRatio * 15;
     perspCamera.fov += (targetFOV - perspCamera.fov) * 0.05;
     perspCamera.updateProjectionMatrix();
   });

@@ -24,7 +24,9 @@ export function AIOpponent({
   const wheelGroupRef = useRef<THREE.Group>(null);
   const wheelRotRef = useRef(0);
 
-  const { isPlaying, isPaused, selectedTrackId } = useGameStore();
+  const isPlaying = useGameStore((state) => state.isPlaying);
+  const isPaused = useGameStore((state) => state.isPaused);
+  const selectedTrackId = useGameStore((state) => state.selectedTrackId);
   const trackCurve = useMemo(
     () => getTrackLayout(selectedTrackId).curve,
     [selectedTrackId],
