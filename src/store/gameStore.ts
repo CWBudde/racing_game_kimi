@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { subscribeWithSelector } from "zustand/middleware";
 import { DEFAULT_TRACK_ID, getTrackStart, TRACKS } from "../components/trackData";
+import { TOP_SPEED_KMH } from "../components/carConstants";
 
 const HIGHSCORE_STORAGE_KEY = "kart-racing-highscores";
 const initialTrack = TRACKS.find((track) => track.id === DEFAULT_TRACK_ID) ?? TRACKS[0];
@@ -172,7 +173,7 @@ export const useGameStore = create<GameState>()(
     lastRaceRank: null,
 
     speed: 0,
-    maxSpeed: 80,
+    maxSpeed: TOP_SPEED_KMH,
     boostAmount: 100,
     hasItem: false,
     currentItem: null,
@@ -292,8 +293,10 @@ export const useGameStore = create<GameState>()(
       }
     },
 
-    updateSpeed: (speed) =>
-      set({ speed: Math.max(0, Math.min(speed, get().maxSpeed)) }),
+    // Report the true km/h — the physics already caps velocity, so no upper
+    // clamp here (speed-star + boost can legitimately exceed maxSpeed, which is
+    // only the speedometer's full-scale). Clamping would understate the number.
+    updateSpeed: (speed) => set({ speed: Math.max(0, speed) }),
 
     updateBoost: (amount) =>
       set({ boostAmount: Math.max(0, Math.min(100, amount)) }),

@@ -4,6 +4,7 @@ import { type RapierRigidBody } from "@react-three/rapier";
 import * as THREE from "three";
 import { useGameStore } from "../store/gameStore";
 import { getTrackLayout } from "./trackData";
+import { BOOST_MULTIPLIER, MAX_SPEED } from "./carConstants";
 
 export const keys = {
   w: false,
@@ -151,14 +152,12 @@ const gateAlong = (g: Gate, x: number, z: number) =>
 const gateLateral = (g: Gate, x: number, z: number) =>
   Math.abs((x - g.cx) * -g.tz + (z - g.cz) * g.tx);
 
-const MAX_SPEED = 45;
 const MAX_REVERSE_SPEED = 15;
 const ACCELERATION = 8;
 const DECELERATION = 4;
 const BRAKE_FORCE = 35;
 const STEERING_SPEED = 5.0;
 const MAX_STEERING_ANGLE = 0.8;
-const BOOST_MULTIPLIER = 1.5;
 export const CAR_MASS = 80;
 
 const getYawFromQuaternion = (q: {

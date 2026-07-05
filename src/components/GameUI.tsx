@@ -127,6 +127,7 @@ export function GameUI() {
     lastRaceRank,
     selectedTrackId,
     speed,
+    maxSpeed,
     boostAmount,
     hasItem,
     currentItem,
@@ -457,7 +458,7 @@ export function GameUI() {
           <div className="w-32 h-2 bg-gray-700 rounded-full mt-2 overflow-hidden">
             <div
               className="h-full bg-gradient-to-r from-green-500 via-yellow-500 to-red-500 transition-all duration-100"
-              style={{ width: `${speed}%` }}
+              style={{ width: `${Math.min(100, (speed / maxSpeed) * 100)}%` }}
             />
           </div>
         </div>
