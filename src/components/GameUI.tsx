@@ -77,12 +77,15 @@ const formatTime = (seconds: number): string => {
 };
 
 function HighScorePanel() {
-  const { highScores, lastRaceRank } = useGameStore();
+  const { highScores, lastRaceRank, selectedTrackId } = useGameStore();
+  const track = TRACKS.find((t) => t.id === selectedTrackId);
 
   return (
     <div className="bg-black/30 p-4 rounded-lg text-left">
       <div className="flex items-center justify-between gap-4 mb-3">
-        <h3 className="text-yellow-400 font-bold">Top 5</h3>
+        <h3 className="text-yellow-400 font-bold">
+          Top 5{track ? ` · ${track.name}` : ""}
+        </h3>
         {lastRaceRank && (
           <span className="text-xs text-green-300">
             Latest finish: #{lastRaceRank}
@@ -91,7 +94,9 @@ function HighScorePanel() {
       </div>
 
       {highScores.length === 0 ? (
-        <div className="text-sm text-gray-300">No recorded runs yet.</div>
+        <div className="text-sm text-gray-300">
+          No recorded runs on this track yet.
+        </div>
       ) : (
         <div className="space-y-2">
           {highScores.map((score, index) => (
