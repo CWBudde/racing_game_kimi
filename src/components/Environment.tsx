@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useFrame } from "@react-three/fiber";
 import {
   CuboidCollider,
@@ -7,7 +7,73 @@ import {
 } from "@react-three/rapier";
 import * as THREE from "three";
 import { getTrackLayout } from "./trackData";
+import { carTransform } from "../store/carTransform";
 import { ITEM_POOLS, type ItemType, useGameStore } from "../store/gameStore";
+
+// A single shadow-casting sun that tracks the player car with a tight frustum.
+//
+// Previously each theme lit the scene with a 2048² directional light covering a
+// static 560 m frustum, so the shadow map was stretched thin across the whole
+// world and every distant tree/barrier rendered into it. By anchoring the light
+// (and its target) to the car each frame we can use a small, crisp frustum: only
+// near geometry falls inside it, which both sharpens shadows and lets the
+// renderer cull far casters for free.
+function FollowSun({
+  color,
+  intensity,
+  offset,
+  extent = 90,
+  mapSize = 1024,
+}: {
+  color?: string;
+  intensity: number;
+  offset: [number, number, number];
+  extent?: number;
+  mapSize?: number;
+}) {
+  const lightRef = useRef<THREE.DirectionalLight>(null);
+  const targetRef = useRef<THREE.Object3D>(null);
+
+  useEffect(() => {
+    if (lightRef.current && targetRef.current) {
+      lightRef.current.target = targetRef.current;
+    }
+  }, []);
+
+  useFrame(() => {
+    const light = lightRef.current;
+    const target = targetRef.current;
+    if (!light || !target) return;
+    const { x, y, z } = carTransform;
+    light.position.set(x + offset[0], y + offset[1], z + offset[2]);
+    target.position.set(x, y, z);
+    target.updateMatrixWorld();
+  });
+
+  const far =
+    Math.hypot(offset[0], offset[1], offset[2]) + extent * 2;
+
+  return (
+    <>
+      <directionalLight
+        ref={lightRef}
+        intensity={intensity}
+        color={color}
+        castShadow
+        shadow-mapSize-width={mapSize}
+        shadow-mapSize-height={mapSize}
+        shadow-bias={-0.0004}
+        shadow-camera-near={1}
+        shadow-camera-far={far}
+        shadow-camera-left={-extent}
+        shadow-camera-right={extent}
+        shadow-camera-top={extent}
+        shadow-camera-bottom={-extent}
+      />
+      <object3D ref={targetRef} />
+    </>
+  );
+}
 
 function Tree({
   position,
@@ -721,7 +787,6 @@ export function Environment({ trackId }: EnvironmentProps) {
             penumbra={0.7}
             intensity={140}
             color="#00dfff"
-            castShadow
             distance={420}
           />
           <spotLight
@@ -732,18 +797,10 @@ export function Environment({ trackId }: EnvironmentProps) {
             color="#ff46d5"
             distance={420}
           />
-          <directionalLight
-            position={[80, 110, -20]}
-            intensity={0.45}
+          <FollowSun
             color="#8eb7ff"
-            castShadow
-            shadow-mapSize-width={2048}
-            shadow-mapSize-height={2048}
-            shadow-camera-far={700}
-            shadow-camera-left={-280}
-            shadow-camera-right={280}
-            shadow-camera-top={280}
-            shadow-camera-bottom={-280}
+            intensity={0.45}
+            offset={[80, 110, -20]}
           />
           <ambientLight intensity={0.32} color="#5d79ff" />
           <hemisphereLight args={["#12254f", "#05070d", 0.55]} />
@@ -754,18 +811,7 @@ export function Environment({ trackId }: EnvironmentProps) {
             <sphereGeometry args={[20, 32, 32]} />
             <meshBasicMaterial color={isDesert ? "#ffd27a" : "#ffdd44"} />
           </mesh>
-          <directionalLight
-            position={[200, 120, -200]}
-            intensity={1.2}
-            castShadow
-            shadow-mapSize-width={2048}
-            shadow-mapSize-height={2048}
-            shadow-camera-far={700}
-            shadow-camera-left={-280}
-            shadow-camera-right={280}
-            shadow-camera-top={280}
-            shadow-camera-bottom={-280}
-          />
+          <FollowSun intensity={1.2} offset={[120, 120, -120]} />
           <ambientLight intensity={0.4} />
           <hemisphereLight
             args={[
