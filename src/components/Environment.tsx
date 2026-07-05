@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useFrame } from "@react-three/fiber";
+import { Instance, Instances } from "@react-three/drei";
 import {
   CuboidCollider,
   RigidBody,
@@ -75,54 +76,95 @@ function FollowSun({
   );
 }
 
-function Tree({
-  position,
-  scale = 1,
-}: {
-  position: [number, number, number];
-  scale?: number;
-}) {
+type Placement = { position: [number, number, number]; scale: number };
+
+// Trees rendered as four InstancedMeshes (trunk + three foliage cones) instead
+// of ~100 RigidBodies with 4 meshes each. All trunk colliders share one fixed
+// body. A per-instance uniform scale + y-offset reproduces the old per-tree
+// geometry exactly (the base geometry is the scale-1 tree).
+function TreeField({ trees }: { trees: Placement[] }) {
+  if (trees.length === 0) return null;
   return (
-    <RigidBody type="fixed" position={position} colliders={false}>
-      <mesh castShadow position={[0, 1.5 * scale, 0]}>
-        <cylinderGeometry args={[0.3 * scale, 0.4 * scale, 3 * scale, 8]} />
+    <>
+      <Instances limit={trees.length} castShadow>
+        <cylinderGeometry args={[0.3, 0.4, 3, 8]} />
         <meshStandardMaterial color="#8B4513" />
-      </mesh>
-      <CuboidCollider
-        args={[0.3 * scale, 1.5 * scale, 0.3 * scale]}
-        position={[0, 1.5 * scale, 0]}
-      />
-      <mesh castShadow position={[0, 3.5 * scale, 0]}>
-        <coneGeometry args={[2 * scale, 2.5 * scale, 8]} />
+        {trees.map((t, i) => (
+          <Instance
+            key={i}
+            position={[t.position[0], 1.5 * t.scale, t.position[2]]}
+            scale={t.scale}
+          />
+        ))}
+      </Instances>
+      <Instances limit={trees.length} castShadow>
+        <coneGeometry args={[2, 2.5, 8]} />
         <meshStandardMaterial color="#228B22" />
-      </mesh>
-      <mesh castShadow position={[0, 4.8 * scale, 0]}>
-        <coneGeometry args={[1.5 * scale, 2 * scale, 8]} />
+        {trees.map((t, i) => (
+          <Instance
+            key={i}
+            position={[t.position[0], 3.5 * t.scale, t.position[2]]}
+            scale={t.scale}
+          />
+        ))}
+      </Instances>
+      <Instances limit={trees.length} castShadow>
+        <coneGeometry args={[1.5, 2, 8]} />
         <meshStandardMaterial color="#32CD32" />
-      </mesh>
-      <mesh castShadow position={[0, 5.8 * scale, 0]}>
-        <coneGeometry args={[0.8 * scale, 1.5 * scale, 8]} />
+        {trees.map((t, i) => (
+          <Instance
+            key={i}
+            position={[t.position[0], 4.8 * t.scale, t.position[2]]}
+            scale={t.scale}
+          />
+        ))}
+      </Instances>
+      <Instances limit={trees.length} castShadow>
+        <coneGeometry args={[0.8, 1.5, 8]} />
         <meshStandardMaterial color="#90EE90" />
-      </mesh>
-    </RigidBody>
+        {trees.map((t, i) => (
+          <Instance
+            key={i}
+            position={[t.position[0], 5.8 * t.scale, t.position[2]]}
+            scale={t.scale}
+          />
+        ))}
+      </Instances>
+      <RigidBody type="fixed" colliders={false}>
+        {trees.map((t, i) => (
+          <CuboidCollider
+            key={i}
+            args={[0.3 * t.scale, 1.5 * t.scale, 0.3 * t.scale]}
+            position={[t.position[0], 1.5 * t.scale, t.position[2]]}
+          />
+        ))}
+      </RigidBody>
+    </>
   );
 }
 
-function Rock({
-  position,
-  scale = 1,
-}: {
-  position: [number, number, number];
-  scale?: number;
-}) {
+// Rocks as a single InstancedMesh with one shared collider body.
+function RockField({ rocks }: { rocks: Placement[] }) {
+  if (rocks.length === 0) return null;
   return (
-    <RigidBody type="fixed" position={position} colliders={false}>
-      <mesh castShadow>
-        <dodecahedronGeometry args={[scale, 0]} />
+    <>
+      <Instances limit={rocks.length} castShadow>
+        <dodecahedronGeometry args={[1, 0]} />
         <meshStandardMaterial color="#808080" roughness={0.9} />
-      </mesh>
-      <CuboidCollider args={[scale * 0.8, scale * 0.6, scale * 0.8]} />
-    </RigidBody>
+        {rocks.map((r, i) => (
+          <Instance key={i} position={r.position} scale={r.scale} />
+        ))}
+      </Instances>
+      <RigidBody type="fixed" colliders={false}>
+        {rocks.map((r, i) => (
+          <CuboidCollider
+            key={i}
+            args={[r.scale * 0.8, r.scale * 0.6, r.scale * 0.8]}
+            position={r.position}
+          />
+        ))}
+      </RigidBody>
+    </>
   );
 }
 
@@ -658,15 +700,9 @@ export function Environment({ trackId }: EnvironmentProps) {
 
   return (
     <group>
-      {!isNeon &&
-        trees.map((tree, i) => (
-          <Tree key={`tree-${i}`} position={tree.position} scale={tree.scale} />
-        ))}
+      {!isNeon && <TreeField key={`trees-${trackId}`} trees={trees} />}
 
-      {!isNeon &&
-        rocks.map((rock, i) => (
-          <Rock key={`rock-${i}`} position={rock.position} scale={rock.scale} />
-        ))}
+      {!isNeon && <RockField key={`rocks-${trackId}`} rocks={rocks} />}
 
       {!isNeon &&
         clouds.map((cloud, i) => (

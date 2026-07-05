@@ -220,10 +220,32 @@ export function Track({ trackId }: TrackProps) {
         );
       })}
 
+      {/* Barrier colliders — consolidated from ~260 individual RigidBodies into
+          two fixed bodies (one per side), each holding a CuboidCollider per
+          segment. Rapier handles many colliders per body cheaply; a body each
+          was pure overhead. Visual meshes are rendered separately below. */}
+      <RigidBody type="fixed" colliders={false}>
+        {leftBarrierSegments.map((seg, i) => (
+          <CuboidCollider
+            key={`barrier-left-col-${i}`}
+            args={[0.275, 0.7, seg.length / 2]}
+            position={[seg.position.x, 0.8, seg.position.z]}
+            rotation={[0, seg.angle, 0]}
+          />
+        ))}
+        {rightBarrierSegments.map((seg, i) => (
+          <CuboidCollider
+            key={`barrier-right-col-${i}`}
+            args={[0.275, 0.7, seg.length / 2]}
+            position={[seg.position.x, 0.8, seg.position.z]}
+            rotation={[0, seg.angle, 0]}
+          />
+        ))}
+      </RigidBody>
+
       {leftBarrierSegments.map((seg, i) => (
-        <RigidBody
+        <group
           key={`barrier-left-${i}`}
-          type="fixed"
           position={[seg.position.x, 0.8, seg.position.z]}
           rotation={[0, seg.angle, 0]}
         >
@@ -247,14 +269,12 @@ export function Track({ trackId }: TrackProps) {
               />
             </mesh>
           )}
-          <CuboidCollider args={[0.275, 0.7, seg.length / 2]} />
-        </RigidBody>
+        </group>
       ))}
 
       {rightBarrierSegments.map((seg, i) => (
-        <RigidBody
+        <group
           key={`barrier-right-${i}`}
-          type="fixed"
           position={[seg.position.x, 0.8, seg.position.z]}
           rotation={[0, seg.angle, 0]}
         >
@@ -278,8 +298,7 @@ export function Track({ trackId }: TrackProps) {
               />
             </mesh>
           )}
-          <CuboidCollider args={[0.275, 0.7, seg.length / 2]} />
-        </RigidBody>
+        </group>
       ))}
 
       <group ref={checkpointsRef}>
