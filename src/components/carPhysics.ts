@@ -6,6 +6,7 @@ import { useGameStore } from "../store/gameStore";
 import { carTransform, seedCarTransform } from "../store/carTransform";
 import { getTrackLayout, getTrackStart } from "./trackData";
 import { BOOST_MULTIPLIER, MAX_SPEED } from "./carConstants";
+import { smoothAlpha } from "./smoothing";
 
 export const keys = {
   w: false,
@@ -455,7 +456,7 @@ export function useCarPhysics() {
       currentRot.z,
       currentRot.w,
     );
-    currentQuat.slerp(uprightRot, 0.3);
+    currentQuat.slerp(uprightRot, smoothAlpha(0.3, dt));
     car.setRotation(
       {
         x: currentQuat.x,
@@ -542,10 +543,11 @@ export function useCarPhysics() {
         Math.max(currentSteering * speed * 0.002, -0.1),
         0.1,
       );
+      const tiltAlpha = smoothAlpha(0.1, dt);
       chassisRef.current.rotation.x +=
-        (tiltX - chassisRef.current.rotation.x) * 0.1;
+        (tiltX - chassisRef.current.rotation.x) * tiltAlpha;
       chassisRef.current.rotation.z +=
-        (tiltZ - chassisRef.current.rotation.z) * 0.1;
+        (tiltZ - chassisRef.current.rotation.z) * tiltAlpha;
     }
   });
 

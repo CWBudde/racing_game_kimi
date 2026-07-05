@@ -5,6 +5,7 @@ import { useGameStore } from "../store/gameStore";
 import { carTransform } from "../store/carTransform";
 import { getTrackStart } from "./trackData";
 import { TOP_SPEED_KMH } from "./carConstants";
+import { smoothAlpha } from "./smoothing";
 
 export function CameraController() {
   const targetPosition = useRef(new THREE.Vector3());
@@ -24,7 +25,7 @@ export function CameraController() {
   const CAMERA_LAG = 0.08;
   const LOOK_AHEAD_DISTANCE = 10;
 
-  useFrame(({ camera }) => {
+  useFrame(({ camera }, delta) => {
     if (!isPlaying && !isCountingDown) return;
 
     // Cast camera to PerspectiveCamera to access fov
@@ -46,10 +47,10 @@ export function CameraController() {
       targetLookAt.current.copy(gridCenter).add(forward.clone().multiplyScalar(2));
       targetLookAt.current.y = startPos.y + 1.3;
 
-      camera.position.lerp(targetPosition.current, 0.055);
-      currentLookAt.current.lerp(targetLookAt.current, 0.08);
+      camera.position.lerp(targetPosition.current, smoothAlpha(0.055, delta));
+      currentLookAt.current.lerp(targetLookAt.current, smoothAlpha(0.08, delta));
       camera.lookAt(currentLookAt.current);
-      perspCamera.fov += (48 - perspCamera.fov) * 0.06;
+      perspCamera.fov += (48 - perspCamera.fov) * smoothAlpha(0.06, delta);
       perspCamera.updateProjectionMatrix();
       return;
     }
@@ -82,11 +83,14 @@ export function CameraController() {
       carPos.z + lookAheadZ,
     );
 
-    // Smoothly interpolate camera position
-    camera.position.lerp(targetPosition.current, CAMERA_LAG);
+    // Smoothly interpolate camera position (frame-rate independent)
+    camera.position.lerp(targetPosition.current, smoothAlpha(CAMERA_LAG, delta));
 
     // Smoothly interpolate look-at target
-    currentLookAt.current.lerp(targetLookAt.current, CAMERA_LAG * 1.5);
+    currentLookAt.current.lerp(
+      targetLookAt.current,
+      smoothAlpha(CAMERA_LAG * 1.5, delta),
+    );
 
     // Apply look-at
     camera.lookAt(currentLookAt.current);
@@ -94,7 +98,7 @@ export function CameraController() {
     // Add slight FOV effect based on speed
     const speedRatio = Math.min(carTransform.speedKmh / TOP_SPEED_KMH, 1);
     const targetFOV = 60 + speedRatio * 15;
-    perspCamera.fov += (targetFOV - perspCamera.fov) * 0.05;
+    perspCamera.fov += (targetFOV - perspCamera.fov) * smoothAlpha(0.05, delta);
     perspCamera.updateProjectionMatrix();
   });
 
