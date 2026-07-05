@@ -269,6 +269,28 @@ function Drone({
 
 const RESPAWN_TIME = 5;
 
+// The "?" plate on classic/desert item boxes is identical for every box, so
+// build it once and share it instead of allocating a canvas + texture per box
+// (previously an inline IIFE rebuilt it on every render).
+let questionCanvas: HTMLCanvasElement | null = null;
+function getQuestionCanvas(): HTMLCanvasElement {
+  if (!questionCanvas) {
+    const canvas = document.createElement("canvas");
+    canvas.width = 64;
+    canvas.height = 64;
+    const ctx = canvas.getContext("2d")!;
+    ctx.fillStyle = "#ffdd00";
+    ctx.fillRect(0, 0, 64, 64);
+    ctx.fillStyle = "#000000";
+    ctx.font = "bold 45px Arial";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("?", 32, 32);
+    questionCanvas = canvas;
+  }
+  return questionCanvas;
+}
+
 function seededRandom(seed: number): number {
   const value = Math.sin(seed * 12.9898) * 43758.5453;
   return value - Math.floor(value);
@@ -368,23 +390,7 @@ function ItemBox({
           <mesh position={[0, 0, 0.79]}>
             <planeGeometry args={[0.8, 0.8]} />
             <meshBasicMaterial color="#000000">
-              <canvasTexture
-                attach="map"
-                image={(() => {
-                  const canvas = document.createElement("canvas");
-                  canvas.width = 64;
-                  canvas.height = 64;
-                  const ctx = canvas.getContext("2d")!;
-                  ctx.fillStyle = "#ffdd00";
-                  ctx.fillRect(0, 0, 64, 64);
-                  ctx.fillStyle = "#000000";
-                  ctx.font = "bold 45px Arial";
-                  ctx.textAlign = "center";
-                  ctx.textBaseline = "middle";
-                  ctx.fillText("?", 32, 32);
-                  return canvas;
-                })()}
-              />
+              <canvasTexture attach="map" image={getQuestionCanvas()} />
             </meshBasicMaterial>
           </mesh>
         )}
