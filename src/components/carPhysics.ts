@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useFrame } from "@react-three/fiber";
 import { type RapierRigidBody } from "@react-three/rapier";
 import * as THREE from "three";
@@ -109,6 +109,48 @@ function useKeyboardInput() {
   }, []);
 }
 
+// --- Lap validation via ordered checkpoint gates ---------------------------
+// A lap only counts when the car crosses a sequence of gates in order and then
+// re-crosses the start/finish line (gate 0). Each gate is a line segment laid
+// across the centerline; only the *next expected* gate is tested each frame, so
+// sections where the track folds close to itself can't cause a false trigger,
+// and cutting across the flat infield misses the outer gates entirely.
+const NUM_GATES = 8;
+const GATE_LATERAL_MARGIN = 8; // meters of slack beyond the road half-width
+
+type Gate = {
+  cx: number;
+  cz: number;
+  tx: number; // unit tangent (direction of travel through the gate)
+  tz: number;
+  halfWidth: number;
+};
+
+const buildGates = (points: THREE.Vector3[], roadWidth: number): Gate[] => {
+  const halfWidth = roadWidth * 0.5 + GATE_LATERAL_MARGIN;
+  const gates: Gate[] = [];
+  for (let i = 0; i < NUM_GATES; i++) {
+    const idx = Math.floor((i / NUM_GATES) * points.length);
+    const p = points[idx];
+    const n = points[(idx + 1) % points.length];
+    let tx = n.x - p.x;
+    let tz = n.z - p.z;
+    const len = Math.hypot(tx, tz) || 1;
+    tx /= len;
+    tz /= len;
+    gates.push({ cx: p.x, cz: p.z, tx, tz, halfWidth });
+  }
+  return gates;
+};
+
+// Signed distance along the direction of travel (negative = still approaching).
+const gateAlong = (g: Gate, x: number, z: number) =>
+  (x - g.cx) * g.tx + (z - g.cz) * g.tz;
+
+// Absolute lateral offset from the gate's center on the road.
+const gateLateral = (g: Gate, x: number, z: number) =>
+  Math.abs((x - g.cx) * -g.tz + (z - g.cz) * g.tx);
+
 const MAX_SPEED = 45;
 const MAX_REVERSE_SPEED = 15;
 const ACCELERATION = 8;
@@ -153,12 +195,25 @@ export function useCarPhysics() {
 
   const triggerItem = useGameStore((state) => state.useItem);
 
-  const trackProgressRef = useRef(0);
-  const hasPassedMidRef = useRef(false);
+  const nextGateRef = useRef(1);
+  const gateAlongRef = useRef<number | null>(null);
   const useItemPressedRef = useRef(false);
 
   const [localSpeed, setLocalSpeed] = useState(0);
-  const trackPoints = getTrackLayout(selectedTrackId).points;
+  const trackLayout = getTrackLayout(selectedTrackId);
+  const gates = useMemo(
+    () => buildGates(trackLayout.points, trackLayout.width),
+    [trackLayout],
+  );
+
+  // Restart the gate sequence whenever a race begins (or the track changes).
+  // The car starts on the start/finish line, so the first gate to clear is #1.
+  useEffect(() => {
+    if (isPlaying) {
+      nextGateRef.current = 1;
+      gateAlongRef.current = null;
+    }
+  }, [isPlaying, selectedTrackId]);
 
   useKeyboardInput();
 
@@ -310,27 +365,34 @@ export function useCarPhysics() {
 
     {
       const pos = car.translation();
-      let minDist2 = Infinity;
-      let closestIdx = 0;
-      for (let i = 0; i < trackPoints.length; i++) {
-        const dx = trackPoints[i].x - pos.x;
-        const dz = trackPoints[i].z - pos.z;
-        const d2 = dx * dx + dz * dz;
-        if (d2 < minDist2) {
-          minDist2 = d2;
-          closestIdx = i;
+      const gate = gates[nextGateRef.current];
+      const along = gateAlong(gate, pos.x, pos.z);
+      const prevAlong = gateAlongRef.current;
+
+      // Cross the gate when we move from behind its plane (along < 0) to in
+      // front (along >= 0) while staying within the road's lateral window.
+      // Backwards passes (front -> behind) never trigger.
+      if (
+        prevAlong !== null &&
+        prevAlong < 0 &&
+        along >= 0 &&
+        gateLateral(gate, pos.x, pos.z) < gate.halfWidth
+      ) {
+        const crossed = nextGateRef.current;
+        nextGateRef.current = (crossed + 1) % gates.length;
+        // Seed the tracker for the newly expected gate so we don't misfire.
+        gateAlongRef.current = gateAlong(
+          gates[nextGateRef.current],
+          pos.x,
+          pos.z,
+        );
+        // Gate 0 is the start/finish line: crossing it closes a lap.
+        if (crossed === 0) {
+          completeLap();
         }
+      } else {
+        gateAlongRef.current = along;
       }
-      const progress = closestIdx / trackPoints.length;
-      const prevProgress = trackProgressRef.current;
-
-      if (progress > 0.4 && progress < 0.6) hasPassedMidRef.current = true;
-
-      if (prevProgress > 0.85 && progress < 0.15 && hasPassedMidRef.current) {
-        completeLap();
-        hasPassedMidRef.current = false;
-      }
-      trackProgressRef.current = progress;
     }
 
     const pos = car.translation();

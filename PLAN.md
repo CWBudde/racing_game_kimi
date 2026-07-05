@@ -211,7 +211,7 @@ a handful of correctness bugs, a costly state-management pattern, and missing ra
 
 ### Phase 0 — Correctness (make the game honest) 🔴
 - [x] B1: Fix item sensor height + filter collector to the player body
-- [ ] B2: Sequential checkpoint gates + start/finish sensor for lap validation
+- [x] B2: Sequential checkpoint gates + start/finish sensor for lap validation
 - [ ] B3: Speedometer range/clamp fix
 - [ ] B4: Per-track leaderboards
 - [ ] B5: Delta-time race timer
