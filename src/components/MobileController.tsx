@@ -32,6 +32,12 @@ export function MobileController() {
     [],
   );
 
+  // Long-press on a control fires the OS context menu / text-selection popup on
+  // some mobile browsers, which cancels the touch. Swallow it everywhere.
+  const preventContextMenu = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+  }, []);
+
   if (!isTouchDevice) return null;
 
   return (
@@ -39,7 +45,20 @@ export function MobileController() {
       className="absolute inset-0 z-30 pointer-events-none select-none"
       style={{ touchAction: "none" }}
       onTouchMove={prevent}
+      onContextMenu={preventContextMenu}
     >
+      {/* ---- Respawn (snap back onto the track) ---- */}
+      <div className="absolute left-3 bottom-52 pointer-events-auto">
+        <button
+          className="w-16 h-12 rounded-2xl bg-white/15 backdrop-blur-sm border-2 border-white/40 flex items-center justify-center text-white text-xs font-bold active:bg-white/40 transition-colors"
+          onTouchStart={handleDown("r")}
+          onTouchEnd={handleUp("r")}
+          onTouchCancel={handleUp("r")}
+        >
+          <span className="leading-tight text-center">RESET</span>
+        </button>
+      </div>
+
       {/* ---- Left side: Steering ---- */}
       <div className="absolute left-3 bottom-28 flex gap-3 pointer-events-auto">
         {/* Left */}

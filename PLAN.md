@@ -215,10 +215,10 @@ a handful of correctness bugs, a costly state-management pattern, and missing ra
 - [x] B3: Speedometer range/clamp fix
 - [x] B4: Per-track leaderboards
 - [x] B5: Delta-time race timer
-- [ ] B6: Honest rank labeling (until G2 lands)
-- [ ] B7/M5: Key reset on blur/pause
-- [ ] B8: Respawn key + fall-off auto-reset
-- [ ] B9: AI ride-height fix
+- [x] B6: Honest rank labeling (until G2 lands)
+- [x] B7/M5: Key reset on blur/pause
+- [x] B8: Respawn key + fall-off auto-reset
+- [x] B9: AI ride-height fix
 
 ### Phase 1 — Performance foundation 🟠
 - [ ] P1: Transient per-frame state out of React; selectors everywhere; HUD at ~10 Hz

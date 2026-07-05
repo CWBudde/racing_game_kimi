@@ -14,6 +14,21 @@ export const keys = {
   space: false,
   shift: false,
   e: false,
+  r: false,
+};
+
+// Clears every held key. Called on window blur / tab hide / pause so that
+// Alt-Tabbing (or pausing) while holding a key doesn't leave the car driving
+// itself forever — the browser drops the keyup that would normally release it.
+export const resetKeys = () => {
+  keys.w = false;
+  keys.a = false;
+  keys.s = false;
+  keys.d = false;
+  keys.space = false;
+  keys.shift = false;
+  keys.e = false;
+  keys.r = false;
 };
 
 type ControlState = {
@@ -87,6 +102,7 @@ function useKeyboardInput() {
       if (key === " ") keys.space = true;
       if (key === "shift") keys.shift = true;
       if (key === "e") keys.e = true;
+      if (key === "r") keys.r = true;
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
@@ -98,14 +114,26 @@ function useKeyboardInput() {
       if (key === " ") keys.space = false;
       if (key === "shift") keys.shift = false;
       if (key === "e") keys.e = false;
+      if (key === "r") keys.r = false;
+    };
+
+    // A blurred window / hidden tab stops delivering keyup, so release
+    // everything to avoid a stuck-throttle "ghost" input on return.
+    const handleBlur = () => resetKeys();
+    const handleVisibility = () => {
+      if (document.hidden) resetKeys();
     };
 
     window.addEventListener("keydown", handleKeyDown);
     window.addEventListener("keyup", handleKeyUp);
+    window.addEventListener("blur", handleBlur);
+    document.addEventListener("visibilitychange", handleVisibility);
 
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
+      window.removeEventListener("blur", handleBlur);
+      document.removeEventListener("visibilitychange", handleVisibility);
     };
   }, []);
 }
@@ -152,6 +180,31 @@ const gateAlong = (g: Gate, x: number, z: number) =>
 const gateLateral = (g: Gate, x: number, z: number) =>
   Math.abs((x - g.cx) * -g.tz + (z - g.cz) * g.tx);
 
+// Index of the centerline sample closest to (x, z) — used to snap a respawning
+// car back onto the track at the nearest point of the racing line.
+const nearestPointIndex = (
+  points: THREE.Vector3[],
+  x: number,
+  z: number,
+): number => {
+  let best = 0;
+  let bestDist = Infinity;
+  for (let i = 0; i < points.length; i++) {
+    const dx = points[i].x - x;
+    const dz = points[i].z - z;
+    const d = dx * dx + dz * dz;
+    if (d < bestDist) {
+      bestDist = d;
+      best = i;
+    }
+  }
+  return best;
+};
+
+// Height above the world floor before the car is considered fallen off-world
+// and auto-respawned.
+const FALL_RESET_Y = -10;
+
 const MAX_REVERSE_SPEED = 15;
 const ACCELERATION = 8;
 const DECELERATION = 4;
@@ -197,6 +250,7 @@ export function useCarPhysics() {
   const nextGateRef = useRef(1);
   const gateAlongRef = useRef<number | null>(null);
   const useItemPressedRef = useRef(false);
+  const respawnPressedRef = useRef(false);
 
   const [localSpeed, setLocalSpeed] = useState(0);
   const trackLayout = getTrackLayout(selectedTrackId);
@@ -214,10 +268,55 @@ export function useCarPhysics() {
     }
   }, [isPlaying, selectedTrackId]);
 
+  // Release any held keys when the race pauses or ends, so a key still down at
+  // the moment of pausing doesn't silently keep steering/throttling on resume.
+  useEffect(() => {
+    if (isPaused || !isPlaying) resetKeys();
+  }, [isPaused, isPlaying]);
+
   useKeyboardInput();
 
   useFrame((_, delta) => {
     if (!carRef.current || !isPlaying || isPaused) return;
+
+    const respawnCar = carRef.current;
+    const respawnPos = respawnCar.translation();
+    const wantsRespawn = keys.r;
+    // Manual respawn (R, edge-triggered) or automatic recovery after falling
+    // off the finite ground: snap to the nearest centerline point, face down
+    // the track, and kill all momentum.
+    if (
+      (wantsRespawn && !respawnPressedRef.current) ||
+      respawnPos.y < FALL_RESET_Y
+    ) {
+      const pts = trackLayout.points;
+      const idx = nearestPointIndex(pts, respawnPos.x, respawnPos.z);
+      const p = pts[idx];
+      const n = pts[(idx + 1) % pts.length];
+      const respawnYaw = Math.atan2(n.x - p.x, n.z - p.z);
+      const respawnQuat = new THREE.Quaternion().setFromAxisAngle(
+        new THREE.Vector3(0, 1, 0),
+        respawnYaw,
+      );
+      respawnCar.setTranslation({ x: p.x, y: p.y + 1.5, z: p.z }, true);
+      respawnCar.setRotation(
+        {
+          x: respawnQuat.x,
+          y: respawnQuat.y,
+          z: respawnQuat.z,
+          w: respawnQuat.w,
+        },
+        true,
+      );
+      respawnCar.setLinvel({ x: 0, y: 0, z: 0 }, true);
+      respawnCar.setAngvel({ x: 0, y: 0, z: 0 }, true);
+      steeringRef.current = 0;
+      // Re-seed gate tracking so the teleport can't be read as a gate crossing.
+      gateAlongRef.current = null;
+      respawnPressedRef.current = wantsRespawn;
+      return;
+    }
+    respawnPressedRef.current = wantsRespawn;
 
     const dt = Math.min(delta, 0.05);
     const car = carRef.current;

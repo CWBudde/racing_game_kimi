@@ -88,7 +88,7 @@ function HighScorePanel() {
         </h3>
         {lastRaceRank && (
           <span className="text-xs text-green-300">
-            Latest finish: #{lastRaceRank}
+            Leaderboard: #{lastRaceRank}
           </span>
         )}
       </div>
@@ -307,6 +307,9 @@ export function GameUI() {
               </div>
               <div>
                 <span className="bg-gray-700 px-2 py-1 rounded">E</span> Use Item
+              </div>
+              <div>
+                <span className="bg-gray-700 px-2 py-1 rounded">R</span> Respawn
               </div>
             </div>
           </div>
@@ -530,6 +533,10 @@ export function GameUI() {
             <div className="flex items-center gap-2">
               <span className="bg-gray-700 px-2 py-1 rounded">E</span>
               <span>Item</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="bg-gray-700 px-2 py-1 rounded">R</span>
+              <span>Respawn</span>
             </div>
             <div className="flex items-center gap-2">
               <span className="bg-gray-700 px-2 py-1 rounded">ESC</span>
