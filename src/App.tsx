@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useRef } from "react";
+import { useEffect, useCallback } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
 import { Physics } from "@react-three/rapier";
 import { Stars } from "@react-three/drei";
@@ -22,22 +22,15 @@ function GameScene() {
 
   // Drive the race/lap timer from the render clock — the same one the physics
   // uses — instead of a setInterval, which is throttled in background tabs and
-  // never fires at exactly 100 ms, so the centisecond HUD drifts. We accumulate
-  // real frame delta (capping pathological gaps like a backgrounded tab, where
-  // nothing simulates) and flush to the store at ~10 Hz to avoid a per-frame
-  // store write on every render (the broad per-frame fix is P1).
-  const timerAccumRef = useRef(0);
+  // never fires at exactly 100 ms, so the centisecond HUD drifts. Flush every
+  // frame (updateLapTime self-guards on play/pause) so currentLapTime is always
+  // current when a lap/finish gate calls completeLap; batching would leave up to
+  // one tick unrecorded and under-report the split. The store is already written
+  // per frame by the physics, so this adds no meaningful cost. Pathological gaps
+  // (a backgrounded tab, where nothing simulates) are capped so they aren't
+  // counted as race time.
   useFrame((_, delta) => {
-    const { isPlaying, isPaused } = useGameStore.getState();
-    if (!isPlaying || isPaused) {
-      timerAccumRef.current = 0;
-      return;
-    }
-    timerAccumRef.current += Math.min(delta, 0.1);
-    if (timerAccumRef.current >= 0.1) {
-      updateLapTime(timerAccumRef.current);
-      timerAccumRef.current = 0;
-    }
+    updateLapTime(Math.min(delta, 0.1));
   });
 
   return (
