@@ -221,12 +221,15 @@ a handful of correctness bugs, a costly state-management pattern, and missing ra
 - [x] B9: AI ride-height fix
 
 ### Phase 1 — Performance foundation 🟠
-- [ ] P1: Transient per-frame state out of React; selectors everywhere; HUD at ~10 Hz
-- [ ] P2: Memoize all canvas textures
-- [ ] P3: Instance barriers/trees/rocks/kerbs; consolidate barrier colliders
-- [ ] P4: Prune unused deps + shadcn components; vendor chunking; measure bundle again
-- [ ] P5: Shadow budget (near-field casters, tighter frustum)
-- [ ] B10: Frame-rate-independent camera/tilt smoothing
+- [x] P1: Transient per-frame state out of React; selectors everywhere; HUD at ~10 Hz
+- [x] P2: Memoize all canvas textures
+- [x] P3: Consolidate barrier colliders (~260 → 2 bodies); instance trees + rocks
+      (visual + collider bodies). Remaining: instance barrier/kerb/edge-strip
+      meshes and neon towers/pylons (kept per-segment to preserve neon emissive).
+- [x] P4: Prune unused deps + shadcn components; vendor chunking; measure bundle again
+      (CSS 92 kB → 25 kB; JS now split into react/three/rapier vendor chunks)
+- [x] P5: Shadow budget (car-following sun, 1024² map, tight frustum, one caster)
+- [x] B10: Frame-rate-independent camera/tilt smoothing
 
 ### Phase 2 — Make it a race 🟡
 - [ ] G2: AI progress/laps, live positions in HUD, tuned + rubber-banded speeds, results vs AI
