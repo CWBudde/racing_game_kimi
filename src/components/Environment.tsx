@@ -1,6 +1,10 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { useFrame } from "@react-three/fiber";
-import { CuboidCollider, RigidBody } from "@react-three/rapier";
+import {
+  CuboidCollider,
+  RigidBody,
+  type IntersectionEnterPayload,
+} from "@react-three/rapier";
 import * as THREE from "three";
 import { getTrackLayout } from "./trackData";
 import { ITEM_POOLS, type ItemType, useGameStore } from "../store/gameStore";
@@ -302,13 +306,18 @@ function ItemBox({
   const collectItem = useGameStore((state) => state.collectItem);
   const hasItem = useGameStore((state) => state.hasItem);
 
-  const handleIntersection = useCallback(() => {
-    if (collected || hasItem) return;
-    const item = itemPool[Math.floor(Math.random() * itemPool.length)];
-    collectItem(item);
-    setCollected(true);
-    respawnTimerRef.current = RESPAWN_TIME;
-  }, [collected, collectItem, hasItem, itemPool]);
+  const handleIntersection = useCallback(
+    ({ other }: IntersectionEnterPayload) => {
+      // Only the player car collects items — AI cars drive through untouched.
+      if (!other.rigidBodyObject?.userData?.isPlayer) return;
+      if (collected || hasItem) return;
+      const item = itemPool[Math.floor(Math.random() * itemPool.length)];
+      collectItem(item);
+      setCollected(true);
+      respawnTimerRef.current = RESPAWN_TIME;
+    },
+    [collected, collectItem, hasItem, itemPool],
+  );
 
   useFrame(({ clock }, delta) => {
     if (collected) {
@@ -380,7 +389,10 @@ function ItemBox({
           </mesh>
         )}
       </group>
-      <CuboidCollider args={[0.9, 0.9, 0.9]} sensor />
+      {/* Sensor is anchored at the floating box (body y≈2.2) but stretched down
+          to ground level so the low-sitting player collider (top ≈ y 1.1)
+          actually overlaps it. */}
+      <CuboidCollider args={[0.9, 1.4, 0.9]} position={[0, -1.4, 0]} sensor />
     </RigidBody>
   );
 }
