@@ -24,9 +24,13 @@ export default defineConfig({
         // chunk that separating @react-three/rapier from @react-three/fiber
         // would create.
         manualChunks(id) {
-          if (id.includes("node_modules")) {
-            if (id.includes("/three/")) return "three";
-            if (id.includes("@dimforge")) return "rapier";
+          // Normalize to POSIX separators first: on Windows Rollup module ids
+          // use backslashes, so a raw "/three/" check would never match and the
+          // chunking (and its caching benefit) would silently regress.
+          const normalized = id.replace(/\\/g, "/");
+          if (normalized.includes("node_modules")) {
+            if (normalized.includes("/three/")) return "three";
+            if (normalized.includes("@dimforge")) return "rapier";
             return "vendor";
           }
         },

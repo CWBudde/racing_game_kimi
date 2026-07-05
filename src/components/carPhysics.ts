@@ -240,6 +240,7 @@ export function useCarPhysics() {
   // physics loop never re-renders the Car component.
   const isPlaying = useGameStore((state) => state.isPlaying);
   const isPaused = useGameStore((state) => state.isPaused);
+  const isCountingDown = useGameStore((state) => state.isCountingDown);
   const selectedTrackId = useGameStore((state) => state.selectedTrackId);
 
   const nextGateRef = useRef(1);
@@ -257,16 +258,22 @@ export function useCarPhysics() {
     [trackLayout],
   );
 
-  // Restart the gate sequence whenever a race begins (or the track changes).
-  // The car starts on the start/finish line, so the first gate to clear is #1.
+  // Seed the transient pose as soon as the countdown begins (not just when the
+  // race starts), so the car-following sun and camera anchor to the grid for the
+  // whole countdown instead of reading the default (0,0,0) transform.
+  useEffect(() => {
+    if (isPlaying || isCountingDown) {
+      const start = getTrackStart(selectedTrackId);
+      seedCarTransform(start.position, start.yaw);
+    }
+  }, [isPlaying, isCountingDown, selectedTrackId]);
+
+  // Restart the gate sequence and HUD cadence when a race actually starts.
   useEffect(() => {
     if (isPlaying) {
       nextGateRef.current = 1;
       gateAlongRef.current = null;
       hudAccumRef.current = 0;
-      // Seed the transient pose so the camera locks onto the grid immediately.
-      const start = getTrackStart(selectedTrackId);
-      seedCarTransform(start.position, start.yaw);
     }
   }, [isPlaying, selectedTrackId]);
 
@@ -516,10 +523,12 @@ export function useCarPhysics() {
       exhaustRef.current.visible = speedKmh > 5;
     }
 
-    // Push the speedometer value to the store at ~10 Hz for the HUD.
+    // Push the speedometer value to the store at ~10 Hz for the HUD. Subtract
+    // the interval (rather than resetting to 0) so leftover delta carries into
+    // the next window and the cadence doesn't drift with variable frame times.
     hudAccumRef.current += dt;
     if (hudAccumRef.current >= 0.1) {
-      hudAccumRef.current = 0;
+      hudAccumRef.current -= 0.1;
       store.updateSpeed(speedKmh);
     }
 
