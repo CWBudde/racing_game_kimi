@@ -36,7 +36,10 @@ export function AIOpponent({
     const tangent = trackCurve.getTangent(t0).normalize();
     const yaw = Math.atan2(tangent.x, tangent.z);
     return {
-      position: [pos.x, pos.y + 0.5, pos.z] as [number, number, number],
+      // Ride height matches the player car: the kart meshes model their wheels
+      // near y≈0 relative to the body, so only a hair of offset is needed to sit
+      // on the road. A larger offset made the AI visibly float above the track.
+      position: [pos.x, pos.y + 0.05, pos.z] as [number, number, number],
       rotation: [0, yaw, 0] as [number, number, number],
     };
   }, [startT, trackCurve]);
@@ -72,7 +75,7 @@ export function AIOpponent({
 
     rbRef.current.setNextKinematicTranslation({
       x: pos.x,
-      y: pos.y + 0.5,
+      y: pos.y + 0.05,
       z: pos.z,
     });
     rbRef.current.setNextKinematicRotation({
