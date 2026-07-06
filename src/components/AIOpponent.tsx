@@ -114,7 +114,9 @@ export function AIOpponent({
     gateAlongRef.current = null;
     finishedRef.current = false;
     stuckTimerRef.current = 0;
-    lastProgressRef.current = spawn.t0;
+    // Seed below any real progress so the first frame reads as "advanced" and
+    // can't false-trigger stuck recovery against the signed progress metric.
+    lastProgressRef.current = -Infinity;
     updateProgress(id, 1, spawn.t0);
   }, [isPlaying, isCountingDown, spawn, id]);
 

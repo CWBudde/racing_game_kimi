@@ -12,6 +12,7 @@ import { GameUI } from "./components/GameUI";
 import { MobileController } from "./components/MobileController";
 import { useGameStore } from "./store/gameStore";
 import { AI_ROSTER } from "./components/aiRoster";
+import { RaceDirector } from "./components/RaceDirector";
 import "./App.css";
 
 function GameScene() {
@@ -85,6 +86,9 @@ function GameScene() {
 
         {/* Environment */}
         <Environment trackId={selectedTrackId} />
+
+        {/* Race logic: live standings + results (renders null) */}
+        <RaceDirector />
       </Physics>
 
       {/* Camera */}
