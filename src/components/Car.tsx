@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { RigidBody, CuboidCollider } from "@react-three/rapier";
-import { useCarPhysics, CAR_MASS } from "./carPhysics";
+import { useCarPhysics } from "./carPhysics";
+import { CAR_MASS } from "./carConstants";
 
 interface CarProps {
   position?: [number, number, number];
