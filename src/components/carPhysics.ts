@@ -4,9 +4,22 @@ import { type RapierRigidBody } from "@react-three/rapier";
 import * as THREE from "three";
 import { useGameStore } from "../store/gameStore";
 import { carTransform, seedCarTransform } from "../store/carTransform";
-import { getTrackLayout, getTrackStart } from "./trackData";
-import { BOOST_MULTIPLIER, MAX_SPEED } from "./carConstants";
+import { getTrackLayout, getTrackStart, progressFraction } from "./trackData";
+import { seedProgress, updateProgress } from "../store/raceStandings";
+import {
+  ACCELERATION,
+  BOOST_MULTIPLIER,
+  CAR_MASS,
+  MAX_SPEED,
+} from "./carConstants";
 import { smoothAlpha } from "./smoothing";
+import { applyKartForces } from "./kartForces";
+import {
+  buildGates,
+  gateAlong,
+  gateLateral,
+  nearestPointIndex,
+} from "./gates";
 
 export const keys = {
   w: false,
@@ -140,80 +153,9 @@ function useKeyboardInput() {
   }, []);
 }
 
-// --- Lap validation via ordered checkpoint gates ---------------------------
-// A lap only counts when the car crosses a sequence of gates in order and then
-// re-crosses the start/finish line (gate 0). Each gate is a line segment laid
-// across the centerline; only the *next expected* gate is tested each frame, so
-// sections where the track folds close to itself can't cause a false trigger,
-// and cutting across the flat infield misses the outer gates entirely.
-const NUM_GATES = 8;
-const GATE_LATERAL_MARGIN = 8; // meters of slack beyond the road half-width
-
-type Gate = {
-  cx: number;
-  cz: number;
-  tx: number; // unit tangent (direction of travel through the gate)
-  tz: number;
-  halfWidth: number;
-};
-
-const buildGates = (points: THREE.Vector3[], roadWidth: number): Gate[] => {
-  const halfWidth = roadWidth * 0.5 + GATE_LATERAL_MARGIN;
-  const gates: Gate[] = [];
-  for (let i = 0; i < NUM_GATES; i++) {
-    const idx = Math.floor((i / NUM_GATES) * points.length);
-    const p = points[idx];
-    const n = points[(idx + 1) % points.length];
-    let tx = n.x - p.x;
-    let tz = n.z - p.z;
-    const len = Math.hypot(tx, tz) || 1;
-    tx /= len;
-    tz /= len;
-    gates.push({ cx: p.x, cz: p.z, tx, tz, halfWidth });
-  }
-  return gates;
-};
-
-// Signed distance along the direction of travel (negative = still approaching).
-const gateAlong = (g: Gate, x: number, z: number) =>
-  (x - g.cx) * g.tx + (z - g.cz) * g.tz;
-
-// Absolute lateral offset from the gate's center on the road.
-const gateLateral = (g: Gate, x: number, z: number) =>
-  Math.abs((x - g.cx) * -g.tz + (z - g.cz) * g.tx);
-
-// Index of the centerline sample closest to (x, z) — used to snap a respawning
-// car back onto the track at the nearest point of the racing line.
-const nearestPointIndex = (
-  points: THREE.Vector3[],
-  x: number,
-  z: number,
-): number => {
-  let best = 0;
-  let bestDist = Infinity;
-  for (let i = 0; i < points.length; i++) {
-    const dx = points[i].x - x;
-    const dz = points[i].z - z;
-    const d = dx * dx + dz * dz;
-    if (d < bestDist) {
-      bestDist = d;
-      best = i;
-    }
-  }
-  return best;
-};
-
 // Height above the world floor before the car is considered fallen off-world
 // and auto-respawned.
 const FALL_RESET_Y = -10;
-
-const MAX_REVERSE_SPEED = 15;
-const ACCELERATION = 8;
-const DECELERATION = 4;
-const BRAKE_FORCE = 35;
-const STEERING_SPEED = 5.0;
-const MAX_STEERING_ANGLE = 0.8;
-export const CAR_MASS = 80;
 
 const getYawFromQuaternion = (q: {
   x: number;
@@ -322,6 +264,9 @@ export function useCarPhysics() {
       steeringRef.current = 0;
       // Re-seed gate tracking so the teleport can't be read as a gate crossing.
       gateAlongRef.current = null;
+      // Teleport-safe progress: reseed the fraction (no wrap inference) so the
+      // next updateProgress doesn't misread the jump across the line as a lap.
+      seedProgress("player", idx / pts.length);
       respawnPressedRef.current = wantsRespawn;
       return;
     }
@@ -333,16 +278,6 @@ export function useCarPhysics() {
     const store = useGameStore.getState();
     const { boostAmount, activeEffect } = store;
     const car = carRef.current;
-    const currentVel = car.linvel();
-    const currentRot = car.rotation();
-    const yaw = getYawFromQuaternion(currentRot);
-
-    const forward = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw));
-    const right = new THREE.Vector3(Math.cos(yaw), 0, -Math.sin(yaw));
-
-    const forwardSpeed = currentVel.x * forward.x + currentVel.z * forward.z;
-    const lateralSpeed = currentVel.x * right.x + currentVel.z * right.z;
-    const speed = Math.sqrt(currentVel.x ** 2 + currentVel.z ** 2);
     const gamepadInput = readGamepadInput();
     const steeringInput =
       gamepadInput.steer || (keys.a ? -1 : 0) + (keys.d ? 1 : 0);
@@ -364,115 +299,39 @@ export function useCarPhysics() {
     const hasSpeedStar = activeEffect?.type === "speed-star";
     const hasGripBoost = activeEffect?.type === "grip-boost";
     const hasTurbo = activeEffect?.type === "turbo";
-    const effectiveMaxSpeed = hasSpeedStar ? MAX_SPEED * 1.5 : MAX_SPEED;
 
-    const targetSteering = steeringInput * MAX_STEERING_ANGLE;
-    const steerLerp = 1 - Math.pow(0.001, dt);
-    steeringRef.current += (targetSteering - steeringRef.current) * steerLerp;
-    const currentSteering = steeringRef.current;
-
-    let acceleration = 0;
-
-    if (throttleInput > 0) {
-      const boost = boostActive && boostAmount > 0 ? BOOST_MULTIPLIER : 1;
-      if (boostActive && boostAmount > 0) {
-        store.updateBoost(boostAmount - dt * 20);
-      }
-      if (forwardSpeed < effectiveMaxSpeed * boost) {
-        acceleration = ACCELERATION * boost * throttleInput;
-      }
-    } else if (brakeInput > 0) {
-      if (forwardSpeed > 0.5) {
-        acceleration = -BRAKE_FORCE * brakeInput;
-      } else if (forwardSpeed > -MAX_REVERSE_SPEED) {
-        acceleration = -ACCELERATION * 0.5 * brakeInput;
-      }
-    } else {
-      const dampFactor = Math.exp(-DECELERATION * 0.15 * dt);
-      car.setLinvel(
-        {
-          x: currentVel.x * dampFactor,
-          y: currentVel.y,
-          z: currentVel.z * dampFactor,
-        },
-        true,
-      );
+    // Boost only applies while throttling; drain matches the pre-refactor loop
+    // (only while accelerating with charge left).
+    const boostOn = throttleInput > 0 && boostActive && boostAmount > 0;
+    if (boostOn) {
+      store.updateBoost(boostAmount - dt * 20);
     }
+    const boostMul = boostOn ? BOOST_MULTIPLIER : 1;
+    const effectiveMaxSpeed =
+      (hasSpeedStar ? MAX_SPEED * 1.5 : MAX_SPEED) * boostMul;
 
-    if (Math.abs(acceleration) > 0.1) {
-      const forceMag = acceleration * dt * CAR_MASS;
-      car.applyImpulse(
-        { x: forward.x * forceMag, y: 0, z: forward.z * forceMag },
-        true,
-      );
-    }
+    // Turbo stays a player-only extra impulse, applied by the core at the same
+    // point in the force sequence as before the refactor.
+    const turboImpulse = hasTurbo ? ACCELERATION * 4 * dt * CAR_MASS : 0;
 
-    if (hasTurbo) {
-      const turboForce = ACCELERATION * 4 * dt * CAR_MASS;
-      car.applyImpulse(
-        { x: forward.x * turboForce, y: 0, z: forward.z * turboForce },
-        true,
-      );
-    }
-
-    if (
-      Math.abs(currentSteering) > 0.01 &&
-      (Math.abs(speed) > 0.1 || throttleInput > 0 || brakeInput > 0)
-    ) {
-      const steerSign = forwardSpeed >= 0 ? 1 : -1;
-      const minTurnRate = 0.15;
-      const speedFactor = Math.max(
-        Math.min(speed / 15, 1) * Math.max(1 - speed / 120, 0.3),
-        minTurnRate,
-      );
-      const angularVelY =
-        -currentSteering * STEERING_SPEED * speedFactor * steerSign;
-      car.setAngvel({ x: 0, y: angularVelY, z: 0 }, true);
-    } else {
-      car.setAngvel({ x: 0, y: 0, z: 0 }, true);
-    }
-
-    if (Math.abs(lateralSpeed) > 0.2) {
-      const baseGrip = hasGripBoost ? 0.95 : 0.85;
-      const gripStrength = handbrakeActive ? 0.4 : baseGrip;
-      const correctionForce = -lateralSpeed * gripStrength * CAR_MASS * dt;
-      car.applyImpulse(
-        { x: right.x * correctionForce, y: 0, z: right.z * correctionForce },
-        true,
-      );
-    }
-
-    if (handbrakeActive) {
-      car.setLinvel(
-        {
-          x: currentVel.x * (1 - 1.5 * dt),
-          y: currentVel.y,
-          z: currentVel.z * (1 - 1.5 * dt),
-        },
-        true,
-      );
-    }
-
-    const uprightRot = new THREE.Quaternion().setFromAxisAngle(
-      new THREE.Vector3(0, 1, 0),
-      yaw,
-    );
-    const currentQuat = new THREE.Quaternion(
-      currentRot.x,
-      currentRot.y,
-      currentRot.z,
-      currentRot.w,
-    );
-    currentQuat.slerp(uprightRot, smoothAlpha(0.3, dt));
-    car.setRotation(
+    const { forwardSpeed, speed, acceleration } = applyKartForces(
+      car,
       {
-        x: currentQuat.x,
-        y: currentQuat.y,
-        z: currentQuat.z,
-        w: currentQuat.w,
+        steer: steeringInput,
+        throttle: throttleInput,
+        brake: brakeInput,
+        handbrake: handbrakeActive,
       },
-      true,
+      steeringRef,
+      {
+        maxSpeed: effectiveMaxSpeed,
+        accelMul: boostMul,
+        gripBase: hasGripBoost ? 0.95 : 0.85,
+      },
+      dt,
+      turboImpulse,
     );
+    const currentSteering = steeringRef.current;
 
     {
       const pos = car.translation();
@@ -516,6 +375,14 @@ export function useCarPhysics() {
     carTransform.z = pos.z;
     carTransform.yaw = finalYaw;
     carTransform.speedKmh = speedKmh;
+
+    // Feed the player's continuous progress into the race standings (lap count
+    // is authoritative from the store; the fraction orders cars within a lap).
+    updateProgress(
+      "player",
+      store.lap,
+      progressFraction(trackLayout.points, pos.x, pos.z),
+    );
 
     // Toggle exhaust visibility directly instead of via React state, which used
     // to re-render the whole car mesh tree every frame.

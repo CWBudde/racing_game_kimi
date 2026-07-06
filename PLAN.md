@@ -209,52 +209,169 @@ a handful of correctness bugs, a costly state-management pattern, and missing ra
 
 ## 3. Phased roadmap
 
-### Phase 0 — Correctness (make the game honest) 🔴
-- [x] B1: Fix item sensor height + filter collector to the player body
-- [x] B2: Sequential checkpoint gates + start/finish sensor for lap validation
-- [x] B3: Speedometer range/clamp fix
-- [x] B4: Per-track leaderboards
-- [x] B5: Delta-time race timer
-- [x] B6: Honest rank labeling (until G2 lands)
-- [x] B7/M5: Key reset on blur/pause
-- [x] B8: Respawn key + fall-off auto-reset
-- [x] B9: AI ride-height fix
+Each finding is broken into a **subtask** with concrete ToDo items. Check off items as they land.
+Progress markers: ✅ done · 🚧 in progress · ⬜ not started.
 
-### Phase 1 — Performance foundation 🟠
-- [x] P1: Transient per-frame state out of React; selectors everywhere; HUD at ~10 Hz
-- [x] P2: Memoize all canvas textures
-- [x] P3: Consolidate barrier colliders (~260 → 2 bodies); instance trees + rocks
-      (visual + collider bodies). Remaining: instance barrier/kerb/edge-strip
-      meshes and neon towers/pylons (kept per-segment to preserve neon emissive).
-- [x] P4: Prune unused deps + shadcn components; vendor chunking; measure bundle again
-      (CSS 92 kB → 25 kB; JS now split into react/three/rapier vendor chunks)
-- [x] P5: Shadow budget (car-following sun, 1024² map, tight frustum, one caster)
-- [x] B10: Frame-rate-independent camera/tilt smoothing
+### Phase 0 — Correctness (make the game honest) 🔴 — ✅ **complete**
 
-### Phase 2 — Make it a race 🟡
-- [ ] G2: AI progress/laps, live positions in HUD, tuned + rubber-banded speeds, results vs AI
-- [ ] G1: Off-track slowdown
-- [ ] G5/U1: Minimap, wrong-way warning, lap-time toast, final-lap callout
-- [ ] U2: Lap-time breakdown on results
-- [ ] A1/A2: Engine sound + core SFX (countdown, collision, pickup, lap)
+#### 0.1 · B1 — Only the player collects item boxes ✅
+- [x] Lower the item sensor so it overlaps the player collider (or extend to the ground)
+- [x] Inspect the entering body (`rigidBodyObject` / collision groups) and grant items only to the player
+- [x] Verify AI driving through a box no longer awards the player an item
 
-### Phase 3 — Depth & delight 🟢
-- [ ] G3: Item rework (roulette, distinct effects, visual feedback on car)
-- [ ] G6/C2: Shared kart model + player car/color select
-- [ ] G4: One track with elevation/banking (pipeline generalization)
-- [ ] A3/A4: Music + audio settings
-- [ ] U3: Track-shape previews + per-track bests in the menu
-- [ ] M1–M4: Analog touch steering, state-aware touch UI, gamepad docs/rumble
-- [ ] Visual polish: skid marks, drift/boost particles, post-processing (bloom for neon)
+#### 0.2 · B2 — Fair lap validation via ordered checkpoints ✅
+- [x] Turn the 8 decorative rings into checkpoint sensors + add a start/finish line sensor
+- [x] Require passing gates in sequence before a lap counts
+- [x] Reject infield cuts and nearest-point jumps on folded track sections
 
-### Phase 4 — Code health (parallel, ongoing) ⚪
-- [ ] C1: Rewrite AGENTS.md to match the current architecture
-- [ ] C3/C4/C5: Dead code removal, store split, tuning constants module
-- [ ] C6: Vitest for store/track/lap logic
-- [ ] C7: PR CI (typecheck + lint + test)
-- [ ] U4/U5/U6: Countdown-pause, hint once, settings panel
+#### 0.3 · B3 — Correct speedometer range ✅
+- [x] Derive `maxSpeed` from the physics constants (45 m/s ⇒ 162 km/h) instead of hardcoded 80
+- [x] Normalize the HUD bar width against the real top speed
+- [x] Confirm boost/speed-star effects are now visible on the gauge
 
-**Suggested order of attack:** Phase 0 is small (each item is hours, not days) and removes
-everything that makes the game feel broken. Phase 1 P1+P2 should land before any new features,
-because every future feature gets cheaper once per-frame rendering is fixed. Phases 2→3 are the
-visible payoff; Phase 4 runs alongside everything.
+#### 0.4 · B4 — Per-track leaderboards ✅
+- [x] Add `trackId` to `HighScoreEntry`
+- [x] Key high-score storage/sorting by track id
+- [x] Show the selected track's board in the menu
+
+#### 0.5 · B5 — Delta-time race timer ✅
+- [x] Replace the `setInterval(100ms)` accumulator with a render-clock / `performance.now()` diff
+- [x] Drive the timer from the same clock as physics
+- [x] Flush the timer every frame so lap splits aren't under-reported
+
+#### 0.6 · B6 — Honest rank labeling ✅
+- [x] Relabel `lastRaceRank` UI as "Leaderboard: #N" (real race position deferred to G2)
+
+#### 0.7 · B7 / M5 — Key reset on focus loss & pause ✅
+- [x] Reset the shared `keys` object on `window` `blur` / `visibilitychange`
+- [x] Clear keys on pause
+- [x] Prevent context menu / double-tap zoom on mobile buttons
+
+#### 0.8 · B8 — Respawn & fall-off recovery ✅
+- [x] Add a respawn action (R key / mobile button) snapping to nearest center-line point, facing forward
+- [x] Auto-reset when `y < -10`
+
+#### 0.9 · B9 — AI ride-height fix ✅
+- [x] Drop the AI body offset from `+0.5` to ≈ `0.05` so AI cars sit on the road
+
+### Phase 1 — Performance foundation 🟠 — ✅ **complete**
+
+#### 1.1 · P1 — Per-frame state out of React ✅
+- [x] Move car position/rotation/speed to a mutable ref module / transient store fields
+- [x] Camera reads a ref via `subscribe`, not props
+- [x] Convert remaining subscriptions to selectors (`useGameStore(s => s.lap)` etc.)
+- [x] Throttle HUD updates to ~10 Hz
+- [x] Replace `localSpeed` exhaust state with a ref + material toggle
+
+#### 1.2 · P2 — Memoize canvas textures ✅
+- [x] Hoist car number-plate, track, and item-box canvas textures into `useMemo`
+
+#### 1.3 · P3 — Instancing & collider consolidation ✅ (partial by design)
+- [x] Consolidate ~260 barrier colliders → 2 fixed bodies
+- [x] Instance trees + rocks (visual + collider bodies)
+- [ ] _Deferred:_ instance barrier/kerb/edge-strip meshes and neon towers/pylons
+      (kept per-segment to preserve neon emissive — revisit if draw calls hurt)
+
+#### 1.4 · P4 — Bundle diet ✅
+- [x] Prune ~30 unused deps and unused shadcn components (CSS 92 kB → 25 kB)
+- [x] Add `manualChunks` vendor splitting (react / three / rapier)
+- [ ] _Deferred:_ lazy-load the Physics world behind the menu
+
+#### 1.5 · P5 — Shadow budget ✅
+- [x] Car-following sun with a tight frustum, 1024² map, single caster
+
+#### 1.6 · B10 — Frame-rate-independent smoothing ✅
+- [x] Use exponential-decay (`1 - pow(k, dt)`) for camera, chassis tilt, and countdown camera
+
+### Phase 2 — Make it a race 🟡 — ⬜ not started
+
+#### 2.1 · G2 — AI that actually races
+- [ ] Give each AI a progress + lap counter (reuse the B2 checkpoint model)
+- [ ] Compute live race positions every frame; expose to HUD as "P1/3"
+- [ ] Scale AI target speed to track length + a difficulty setting (drop hardcoded seconds-per-lap)
+- [ ] Add light rubber-banding (catch-up / fall-back relative to the player)
+- [ ] End the race with a results table: player vs AI finish times
+
+#### 2.2 · G1 — Off-track slowdown
+- [ ] Reuse the center-line distance already computed for lap progress
+- [ ] Apply a drag multiplier when the car is off the road surface
+- [ ] Add camera rumble / feedback while off-track
+
+#### 2.3 · G5 / U1 — Race-craft HUD
+- [ ] Minimap: draw the center line to a small canvas with a dot per car
+- [ ] Wrong-way detection + warning
+- [ ] Lap-time toast on crossing the line
+- [ ] "Final lap" callout
+
+#### 2.4 · U2 — Lap-time breakdown on results
+- [ ] Render the already-stored `lapTimes` as a per-lap list on the results screen
+- [ ] Highlight "new best lap!"
+
+#### 2.5 · A1 / A2 — Engine sound + core SFX
+- [ ] Engine loop pitched by speed (WebAudio oscillator or looped sample)
+- [ ] Countdown beeps matched to the light steps
+- [ ] Collision thud, item pickup/use, boost hiss
+- [ ] Lap / final-lap chime, race-finish sting
+
+### Phase 3 — Depth & delight 🟢 — ⬜ not started
+
+#### 3.1 · G3 — Item rework
+- [ ] Differentiate effects (shield, oil slick, missile once AI are real opponents)
+- [ ] Pickup roulette animation + sound
+- [ ] Visual feedback on the car (glow, trail)
+
+#### 3.2 · G6 / C2 — Shared kart model + car select
+- [ ] Extract a shared `<KartModel color number />` used by `Car` and `AIOpponent` (dedupe first)
+- [ ] Add a 3-choice car select with accel/top-speed/grip tradeoffs
+
+#### 3.3 · G4 — Elevation / banking on one track
+- [ ] Generalize the car up-slerp (`carPhysics.ts`) to handle pitch, not yaw-only
+- [ ] Enable pitch in `enabledRotations`
+- [ ] Author one track with elevation / banking / a jump using 3D control points
+
+#### 3.4 · A3 / A4 — Music + audio settings
+- [ ] Menu + in-race music (chill for coastal, synthwave for neon)
+- [ ] Settings: master / music / SFX volume, persisted; default on with a HUD mute button
+
+#### 3.5 · U3 — Track select polish
+- [ ] Draw a mini track-shape preview per card from its control points
+- [ ] Show per-track best time on each card (needs B4 — done)
+
+#### 3.6 · M1–M4 — Mobile & gamepad
+- [ ] Analog touch steering (virtual joystick or tilt; at minimum ramp while held)
+- [ ] Hide touch controls unless `isPlaying`
+- [ ] Reflow HUD when touch controls are active (avoid `bottom-28` collision)
+- [ ] Document gamepad; add rumble on collision + "press any button" start
+
+#### 3.7 · Visual polish
+- [ ] Skid marks
+- [ ] Drift / boost particles
+- [ ] Post-processing (bloom for neon)
+
+### Phase 4 — Code health (parallel, ongoing) ⚪ — ⬜ not started
+
+#### 4.1 · C1 — Rewrite AGENTS.md
+- [ ] Update gravity (-10), mass (80), AI/items/laps-now-exist, and current file responsibilities
+
+#### 4.2 · C3 / C4 / C5 — Cleanup & structure
+- [ ] Remove dead exports (`TRACK_POINTS`, `TRACK_SIDES`, `TRACK_WIDTH`, `ITEM_INFO.duration`)
+- [ ] Fix `package.json` name (still `my-app@0.0.0`)
+- [ ] Split transient per-frame data from persistent race state in the store
+- [ ] Key `ITEM_POOLS` off `TrackDefinition` instead of raw string ids
+- [ ] Collect physics/AI magic numbers into a `tuning.ts`
+
+#### 4.3 · C6 — Tests
+- [ ] Vitest for high-score persistence/sorting, `completeLap` flow, barrier segment generation, checkpoint ordering
+
+#### 4.4 · C7 — PR CI
+- [ ] Add a PR workflow running `tsc -b`, `eslint`, and tests
+
+#### 4.5 · U4 / U5 / U6 — UX settings
+- [ ] Stop the countdown when ESC is pressed mid-countdown
+- [ ] Show the "controls" hint once per session, not every un-pause
+- [ ] Settings panel: shadows on/off, DPR cap, camera distance/FOV, colorblind-safe kerbs
+
+**Suggested order of attack:** Phase 0 (correctness) and Phase 1 (performance) are done. Phase 2
+turns the prototype into an actual race (AI positions, off-track cost, HUD, sound) and is the next
+highest-value work — start with **2.1 (G2)** since 2.3/2.4 depend on real race positions. Phase 3
+is the depth-and-delight payoff; Phase 4 code-health items can run alongside everything.

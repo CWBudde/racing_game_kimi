@@ -11,6 +11,8 @@ import { AIOpponent } from "./components/AIOpponent";
 import { GameUI } from "./components/GameUI";
 import { MobileController } from "./components/MobileController";
 import { useGameStore } from "./store/gameStore";
+import { AI_ROSTER } from "./components/aiRoster";
+import { RaceDirector } from "./components/RaceDirector";
 import "./App.css";
 
 function GameScene() {
@@ -71,23 +73,22 @@ function GameScene() {
         <Car key={`player-${selectedTrackId}`} position={playerStart.position} />
 
         {/* AI Opponents */}
-        <AIOpponent
-          key={`ai-2-${selectedTrackId}`}
-          color="#2563eb"
-          carNumber={2}
-          startT={0.97}
-          speedT={0.048}
-        />
-        <AIOpponent
-          key={`ai-3-${selectedTrackId}`}
-          color="#16a34a"
-          carNumber={3}
-          startT={0.94}
-          speedT={0.042}
-        />
+        {AI_ROSTER.map((ai) => (
+          <AIOpponent
+            key={`${ai.id}-${selectedTrackId}`}
+            id={ai.id}
+            label={ai.label}
+            color={ai.color}
+            carNumber={ai.carNumber}
+            startT={ai.startT}
+          />
+        ))}
 
         {/* Environment */}
         <Environment trackId={selectedTrackId} />
+
+        {/* Race logic: live standings + results (renders null) */}
+        <RaceDirector />
       </Physics>
 
       {/* Camera */}

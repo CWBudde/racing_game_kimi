@@ -230,6 +230,29 @@ export function getTrackStart(trackId = DEFAULT_TRACK_ID): {
   return getTrackLayout(trackId).start;
 }
 
+// Fraction in [0, 1) around the centerline of the sample nearest (x, z) — it is
+// best / points.length, so it never quite reaches 1. Shared by the player and AI
+// so race standings order everyone on one progress metric. Callers combine this
+// with a lap count for a monotonic race position.
+export function progressFraction(
+  points: THREE.Vector3[],
+  x: number,
+  z: number,
+): number {
+  let best = 0;
+  let bestDist = Infinity;
+  for (let i = 0; i < points.length; i++) {
+    const dx = points[i].x - x;
+    const dz = points[i].z - z;
+    const d = dx * dx + dz * dz;
+    if (d < bestDist) {
+      bestDist = d;
+      best = i;
+    }
+  }
+  return best / points.length;
+}
+
 export function generateBarrierSegments(
   polyline: THREE.Vector3[],
   spacing: number,

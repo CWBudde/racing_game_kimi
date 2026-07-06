@@ -133,6 +133,9 @@ export function GameUI() {
     isCountingDown,
     lap,
     totalLaps,
+    playerPosition,
+    racerCount,
+    raceResults,
     currentLapTime,
     totalRaceTime,
     bestLapTime,
@@ -144,6 +147,8 @@ export function GameUI() {
     hasItem,
     currentItem,
     activeEffect,
+    difficulty,
+    setDifficulty,
     openMainMenu,
     openRaceSetup,
     selectTrack,
@@ -159,6 +164,9 @@ export function GameUI() {
       isCountingDown: state.isCountingDown,
       lap: state.lap,
       totalLaps: state.totalLaps,
+      playerPosition: state.playerPosition,
+      racerCount: state.racerCount,
+      raceResults: state.raceResults,
       currentLapTime: state.currentLapTime,
       totalRaceTime: state.totalRaceTime,
       bestLapTime: state.bestLapTime,
@@ -170,6 +178,8 @@ export function GameUI() {
       hasItem: state.hasItem,
       currentItem: state.currentItem,
       activeEffect: state.activeEffect,
+      difficulty: state.difficulty,
+      setDifficulty: state.setDifficulty,
       openMainMenu: state.openMainMenu,
       openRaceSetup: state.openRaceSetup,
       selectTrack: state.selectTrack,
@@ -348,6 +358,25 @@ export function GameUI() {
             </div>
           </div>
 
+          <div className="mb-6 text-left">
+            <h3 className="text-yellow-400 font-bold mb-2">Opponent Difficulty:</h3>
+            <div className="grid grid-cols-3 gap-2">
+              {(["easy", "normal", "hard"] as const).map((level) => (
+                <button
+                  key={level}
+                  onClick={() => setDifficulty(level)}
+                  className={`py-2 px-3 rounded-lg font-bold capitalize transition-all ${
+                    difficulty === level
+                      ? "bg-gradient-to-r from-cyan-500 to-fuchsia-500 text-white shadow-lg"
+                      : "bg-black/40 text-cyan-100 hover:bg-black/60"
+                  }`}
+                >
+                  {level}
+                </button>
+              ))}
+            </div>
+          </div>
+
           <div className="mb-6">
             <HighScorePanel />
           </div>
@@ -400,6 +429,41 @@ export function GameUI() {
               </div>
             )}
           </div>
+
+          {raceResults.length > 0 && (
+            <div className="bg-black/30 p-4 rounded-lg mb-6 text-left">
+              <h3 className="text-yellow-400 font-bold mb-3 text-center">
+                Finishing Order
+              </h3>
+              <div className="space-y-1">
+                {raceResults.map((r) => (
+                  <div
+                    key={r.id}
+                    className={`flex items-center gap-2 px-2 py-1 rounded ${
+                      r.isPlayer ? "bg-white/15 font-bold" : ""
+                    }`}
+                  >
+                    <span className="text-gray-300 font-mono w-6">
+                      P{r.position}
+                    </span>
+                    <span
+                      className="w-3 h-3 rounded-sm shrink-0"
+                      style={{ backgroundColor: r.color }}
+                    />
+                    <span className="text-white flex-1">
+                      {r.isPlayer ? "You" : r.label}
+                    </span>
+                    <span className="text-gray-200 font-mono">
+                      {formatTime(r.totalTime)}
+                    </span>
+                    <span className="text-gray-400 font-mono text-sm w-16 text-right">
+                      {r.gap > 0 ? `+${r.gap.toFixed(2)}` : "—"}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className="mb-6">
             <HighScorePanel />
@@ -455,14 +519,28 @@ export function GameUI() {
   return (
     <>
       <div className="absolute top-0 left-0 right-0 p-4 flex justify-between items-start z-40 pointer-events-none">
-        <div className="bg-black/60 backdrop-blur-sm rounded-xl p-3 border-2 border-yellow-400">
-          <div className="text-yellow-400 text-sm font-bold uppercase tracking-wider">
-            Lap
+        <div className="flex items-start gap-3">
+          <div className="bg-black/60 backdrop-blur-sm rounded-xl p-3 border-2 border-yellow-400">
+            <div className="text-yellow-400 text-sm font-bold uppercase tracking-wider">
+              Lap
+            </div>
+            <div className="text-white text-3xl font-mono font-bold">
+              {lap}
+              <span className="text-gray-400 text-lg">/{totalLaps}</span>
+            </div>
           </div>
-          <div className="text-white text-3xl font-mono font-bold">
-            {lap}
-            <span className="text-gray-400 text-lg">/{totalLaps}</span>
-          </div>
+
+          {racerCount > 0 && (
+            <div className="bg-black/60 backdrop-blur-sm rounded-xl p-3 border-2 border-green-400">
+              <div className="text-green-400 text-sm font-bold uppercase tracking-wider">
+                Pos
+              </div>
+              <div className="text-white text-3xl font-mono font-bold">
+                {playerPosition || "-"}
+                <span className="text-gray-400 text-lg">/{racerCount}</span>
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="bg-black/60 backdrop-blur-sm rounded-xl p-3 border-2 border-blue-400">
