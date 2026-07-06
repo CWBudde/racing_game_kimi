@@ -50,29 +50,44 @@ export function rubberBand(
 }
 
 export interface AiInputArgs {
-  curve: THREE.Curve<THREE.Vector3>;
-  t: number; // current progress fraction 0..1
+  points: THREE.Vector3[]; // arc-length-spaced centerline samples
+  idx: number; // nearest centerline sample to the car
+  spacing: number; // meters between adjacent samples (trackLength / N)
   posX: number;
   posZ: number;
   yaw: number;
   forwardSpeed: number;
   baseMax: number; // difficulty + rubber-band already folded in (m/s)
-  trackLength: number; // curve.getLength(), to convert a lookahead distance to t
 }
 
-// Produce steering + throttle/brake for one frame. Steering aims at a lookahead
-// point on the centerline; throttle/brake track a curvature-limited speed.
+// Produce steering + throttle/brake for one frame. Everything is measured on the
+// arc-length-spaced `points` array via index offsets, so a lookahead expressed
+// in meters is exact — unlike curve.getPoint(u), whose parameter u is not
+// arc-length and would make the effective lookahead vary along the track.
 export function computeAiInput(args: AiInputArgs): {
   input: KartInput;
   targetSpeed: number;
 } {
-  const { curve, t, posX, posZ, yaw, forwardSpeed, baseMax, trackLength } = args;
+  const { points, idx, spacing, posX, posZ, yaw, forwardSpeed, baseMax } = args;
+  const n = points.length;
+  const at = (i: number) => points[((i % n) + n) % n];
+  const tangentAt = (i: number) => {
+    const a = at(i);
+    const b = at(i + 1);
+    const dx = b.x - a.x;
+    const dz = b.z - a.z;
+    const len = Math.hypot(dx, dz) || 1;
+    return { x: dx / len, z: dz / len };
+  };
+  const angleBetween = (
+    a: { x: number; z: number },
+    b: { x: number; z: number },
+  ) => Math.acos(Math.max(-1, Math.min(1, a.x * b.x + a.z * b.z)));
 
+  // Steering: aim at a point `lookahead` meters ahead along the centerline.
   const lookahead = LOOKAHEAD_BASE + LOOKAHEAD_PER_MS * Math.max(forwardSpeed, 0);
-  const tAhead = (t + lookahead / trackLength) % 1;
-  const aim = curve.getPoint(tAhead);
-
-  // Signed yaw error to the aim point, wrapped to -pi..pi.
+  const kSteer = Math.max(1, Math.round(lookahead / spacing));
+  const aim = at(idx + kSteer);
   const desiredYaw = Math.atan2(aim.x - posX, aim.z - posZ);
   let err = desiredYaw - yaw;
   err = Math.atan2(Math.sin(err), Math.cos(err));
@@ -80,22 +95,17 @@ export function computeAiInput(args: AiInputArgs): {
   // (yawRate = -steer·…), so to reduce a positive error we steer negative.
   const steer = Math.max(-1, Math.min(1, -err / STEER_ERROR_SCALE));
 
-  // Curvature: how much the tangent turns between here and the braking horizon.
-  // The horizon grows with braking distance so fast approaches see corners in
-  // time; sampling two points across it catches the sharpest part of the bend.
+  // Curvature over the braking horizon (grows with braking distance so a corner
+  // is seen in time); sample two points across it to catch the sharpest part.
   const brakeHorizon =
-    BRAKE_HORIZON_BASE +
-    (forwardSpeed * forwardSpeed) / (2 * BRAKE_DECEL);
-  const tanNow = curve.getTangent(t).normalize();
-  const tMid = (t + brakeHorizon / 2 / trackLength) % 1;
-  const tFar = (t + brakeHorizon / trackLength) % 1;
-  const turnMid = Math.acos(
-    Math.max(-1, Math.min(1, tanNow.dot(curve.getTangent(tMid).normalize()))),
+    BRAKE_HORIZON_BASE + (forwardSpeed * forwardSpeed) / (2 * BRAKE_DECEL);
+  const kFar = Math.max(1, Math.round(brakeHorizon / spacing));
+  const kMid = Math.max(1, Math.round(kFar / 2));
+  const tanNow = tangentAt(idx);
+  const turn = Math.max(
+    angleBetween(tanNow, tangentAt(idx + kMid)),
+    angleBetween(tanNow, tangentAt(idx + kFar)),
   );
-  const turnFar = Math.acos(
-    Math.max(-1, Math.min(1, tanNow.dot(curve.getTangent(tFar).normalize()))),
-  );
-  const turn = Math.max(turnMid, turnFar);
   const targetSpeed = curvatureTargetSpeed(baseMax, turn);
 
   const throttle = forwardSpeed < targetSpeed * 0.98 ? 1 : 0;

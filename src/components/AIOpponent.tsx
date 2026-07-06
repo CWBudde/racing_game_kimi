@@ -3,7 +3,7 @@ import { useFrame } from "@react-three/fiber";
 import { CuboidCollider, RigidBody } from "@react-three/rapier";
 import type { RapierRigidBody } from "@react-three/rapier";
 import * as THREE from "three";
-import { getTrackLayout, progressFraction } from "./trackData";
+import { getTrackLayout } from "./trackData";
 import { useGameStore } from "../store/gameStore";
 import { CAR_MASS, MAX_SPEED } from "./carConstants";
 import { applyKartForces, yawFromQuat } from "./kartForces";
@@ -57,7 +57,12 @@ export function AIOpponent({
     () => getTrackLayout(selectedTrackId),
     [selectedTrackId],
   );
-  const trackLength = useMemo(() => track.curve.getLength(), [track]);
+  // Meters between adjacent centerline samples — the AI controller measures
+  // lookahead/braking horizons in meters via index offsets on this spacing.
+  const spacing = useMemo(
+    () => track.curve.getLength() / track.points.length,
+    [track],
+  );
   const gates = useMemo(
     () => buildGates(track.points, track.width),
     [track],
@@ -132,7 +137,8 @@ export function AIOpponent({
     const forward = { x: Math.sin(yaw), z: Math.cos(yaw) };
     const forwardSpeed = vel.x * forward.x + vel.z * forward.z;
 
-    const t = progressFraction(track.points, pos.x, pos.z);
+    const idx = nearestPointIndex(track.points, pos.x, pos.z);
+    const t = idx / track.points.length;
     const self = getRacer(id);
     const aiProgress = self ? self.progress : lapRef.current - 1 + t;
 
@@ -148,7 +154,6 @@ export function AIOpponent({
       !finishedRef.current &&
       (pos.y < FALL_RESET_Y || stuckTimerRef.current > STUCK_SECONDS)
     ) {
-      const idx = nearestPointIndex(track.points, pos.x, pos.z);
       const p = track.points[idx];
       const yaw2 = centerlineYaw(track.points, idx);
       const q = new THREE.Quaternion().setFromAxisAngle(
@@ -177,14 +182,14 @@ export function AIOpponent({
       : rubberBand(baseMax, gap, diff.rubberMax);
 
     const { input } = computeAiInput({
-      curve: track.curve,
-      t,
+      points: track.points,
+      idx,
+      spacing,
       posX: pos.x,
       posZ: pos.z,
       yaw,
       forwardSpeed,
       baseMax: max,
-      trackLength,
     });
 
     applyKartForces(
