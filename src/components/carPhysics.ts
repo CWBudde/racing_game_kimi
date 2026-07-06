@@ -4,7 +4,8 @@ import { type RapierRigidBody } from "@react-three/rapier";
 import * as THREE from "three";
 import { useGameStore } from "../store/gameStore";
 import { carTransform, seedCarTransform } from "../store/carTransform";
-import { getTrackLayout, getTrackStart } from "./trackData";
+import { getTrackLayout, getTrackStart, progressFraction } from "./trackData";
+import { updateProgress } from "../store/raceStandings";
 import {
   ACCELERATION,
   BOOST_MULTIPLIER,
@@ -428,6 +429,14 @@ export function useCarPhysics() {
     carTransform.z = pos.z;
     carTransform.yaw = finalYaw;
     carTransform.speedKmh = speedKmh;
+
+    // Feed the player's continuous progress into the race standings (lap count
+    // is authoritative from the store; the fraction orders cars within a lap).
+    updateProgress(
+      "player",
+      store.lap,
+      progressFraction(trackLayout.points, pos.x, pos.z),
+    );
 
     // Toggle exhaust visibility directly instead of via React state, which used
     // to re-render the whole car mesh tree every frame.
