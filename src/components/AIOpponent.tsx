@@ -1,50 +1,80 @@
-import { useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import { CuboidCollider, RigidBody } from "@react-three/rapier";
 import type { RapierRigidBody } from "@react-three/rapier";
 import * as THREE from "three";
-import { getTrackLayout } from "./trackData";
+import { getTrackLayout, progressFraction } from "./trackData";
 import { useGameStore } from "../store/gameStore";
+import { CAR_MASS, MAX_SPEED } from "./carConstants";
+import { applyKartForces, yawFromQuat } from "./kartForces";
+import { DIFFICULTY, computeAiInput, rubberBand } from "./aiController";
+import {
+  buildGates,
+  centerlineYaw,
+  gateAlong,
+  gateLateral,
+  nearestPointIndex,
+} from "./gates";
+import { getRacer, stampFinish, updateProgress } from "../store/raceStandings";
 
 interface AIOpponentProps {
+  id: string;
+  label: string;
   color: string;
   carNumber: number;
   startT: number;
-  speedT: number;
 }
 
+const FALL_RESET_Y = -10;
+const STUCK_SECONDS = 1.5; // no progress for this long -> snap back to the line
+const SPAWN_HEIGHT = 1.0; // drop height above the centerline when (re)spawning
+
 export function AIOpponent({
+  id,
   color,
   carNumber,
   startT,
-  speedT,
 }: AIOpponentProps) {
   const rbRef = useRef<RapierRigidBody>(null);
-  const tRef = useRef(((startT % 1) + 1) % 1);
+  const steerStateRef = useRef({ current: 0 });
+  const lapRef = useRef(1);
+  const nextGateRef = useRef(1);
+  const gateAlongRef = useRef<number | null>(null);
+  const finishedRef = useRef(false);
+  const stuckTimerRef = useRef(0);
+  const lastProgressRef = useRef(0);
   const wheelGroupRef = useRef<THREE.Group>(null);
   const wheelRotRef = useRef(0);
 
   const isPlaying = useGameStore((state) => state.isPlaying);
   const isPaused = useGameStore((state) => state.isPaused);
+  const isCountingDown = useGameStore((state) => state.isCountingDown);
   const selectedTrackId = useGameStore((state) => state.selectedTrackId);
-  const trackCurve = useMemo(
-    () => getTrackLayout(selectedTrackId).curve,
+  const difficulty = useGameStore((state) => state.difficulty);
+  const totalLaps = useGameStore((state) => state.totalLaps);
+
+  const track = useMemo(
+    () => getTrackLayout(selectedTrackId),
     [selectedTrackId],
   );
+  const trackLength = useMemo(() => track.curve.getLength(), [track]);
+  const gates = useMemo(
+    () => buildGates(track.points, track.width),
+    [track],
+  );
 
-  const initialState = useMemo(() => {
+  // Grid pose derived from the car's start offset along the racing line.
+  const spawn = useMemo(() => {
     const t0 = ((startT % 1) + 1) % 1;
-    const pos = trackCurve.getPoint(t0);
-    const tangent = trackCurve.getTangent(t0).normalize();
+    const p = track.curve.getPoint(t0);
+    const tangent = track.curve.getTangent(t0).normalize();
     const yaw = Math.atan2(tangent.x, tangent.z);
     return {
-      // Ride height matches the player car: the kart meshes model their wheels
-      // near y≈0 relative to the body, so only a hair of offset is needed to sit
-      // on the road. A larger offset made the AI visibly float above the track.
-      position: [pos.x, pos.y + 0.05, pos.z] as [number, number, number],
+      position: [p.x, p.y + SPAWN_HEIGHT, p.z] as [number, number, number],
       rotation: [0, yaw, 0] as [number, number, number],
+      t0,
     };
-  }, [startT, trackCurve]);
+  }, [startT, track]);
 
   const numberCanvas = useMemo(() => {
     const canvas = document.createElement("canvas");
@@ -61,33 +91,143 @@ export function AIOpponent({
     return canvas;
   }, [carNumber]);
 
+  // (Re)place the car on the grid and reset race trackers whenever a countdown
+  // or race begins — a dynamic body isn't repositioned by the initial prop on a
+  // same-track restart, and it settles during the countdown before racing.
+  useEffect(() => {
+    if (!isPlaying && !isCountingDown) return;
+    const rb = rbRef.current;
+    if (!rb) return;
+    const q = new THREE.Quaternion().setFromEuler(
+      new THREE.Euler(0, spawn.rotation[1], 0),
+    );
+    rb.setTranslation(
+      { x: spawn.position[0], y: spawn.position[1], z: spawn.position[2] },
+      true,
+    );
+    rb.setRotation({ x: q.x, y: q.y, z: q.z, w: q.w }, true);
+    rb.setLinvel({ x: 0, y: 0, z: 0 }, true);
+    rb.setAngvel({ x: 0, y: 0, z: 0 }, true);
+    steerStateRef.current.current = 0;
+    lapRef.current = 1;
+    nextGateRef.current = 1;
+    gateAlongRef.current = null;
+    finishedRef.current = false;
+    stuckTimerRef.current = 0;
+    lastProgressRef.current = spawn.t0;
+    updateProgress(id, 1, spawn.t0);
+  }, [isPlaying, isCountingDown, spawn, id]);
+
   useFrame((_, delta) => {
-    if (!isPlaying || isPaused || !rbRef.current) return;
+    const rb = rbRef.current;
+    if (!rb || !isPlaying || isPaused) return;
+    const dt = Math.min(delta, 0.05);
 
-    tRef.current = (tRef.current + delta * speedT) % 1;
-    const t = tRef.current;
+    const pos = rb.translation();
+    const rot = rb.rotation();
+    const vel = rb.linvel();
+    const yaw = yawFromQuat(rot);
+    const forward = { x: Math.sin(yaw), z: Math.cos(yaw) };
+    const forwardSpeed = vel.x * forward.x + vel.z * forward.z;
 
-    const pos = trackCurve.getPoint(t);
-    const tangent = trackCurve.getTangent(t).normalize();
-    const yaw = Math.atan2(tangent.x, tangent.z);
-    const q = new THREE.Quaternion().setFromAxisAngle(
-      new THREE.Vector3(0, 1, 0),
+    const t = progressFraction(track.points, pos.x, pos.z);
+    const self = getRacer(id);
+    const aiProgress = self ? self.progress : lapRef.current - 1 + t;
+
+    // Fell off the world, or wall-pinned with no progress: snap back to the line.
+    const advanced = aiProgress > lastProgressRef.current + 1e-4;
+    if (advanced) {
+      stuckTimerRef.current = 0;
+      lastProgressRef.current = aiProgress;
+    } else if (!finishedRef.current) {
+      stuckTimerRef.current += dt;
+    }
+    if (
+      !finishedRef.current &&
+      (pos.y < FALL_RESET_Y || stuckTimerRef.current > STUCK_SECONDS)
+    ) {
+      const idx = nearestPointIndex(track.points, pos.x, pos.z);
+      const p = track.points[idx];
+      const yaw2 = centerlineYaw(track.points, idx);
+      const q = new THREE.Quaternion().setFromAxisAngle(
+        new THREE.Vector3(0, 1, 0),
+        yaw2,
+      );
+      rb.setTranslation({ x: p.x, y: p.y + SPAWN_HEIGHT, z: p.z }, true);
+      rb.setRotation({ x: q.x, y: q.y, z: q.z, w: q.w }, true);
+      rb.setLinvel({ x: 0, y: 0, z: 0 }, true);
+      rb.setAngvel({ x: 0, y: 0, z: 0 }, true);
+      steerStateRef.current.current = 0;
+      stuckTimerRef.current = 0;
+      gateAlongRef.current = null;
+      updateProgress(id, lapRef.current, t);
+      return;
+    }
+
+    // Difficulty pace + rubber-band toward the player. A finished car targets 0
+    // so it brakes to a stop after crossing the line.
+    const diff = DIFFICULTY[difficulty];
+    const player = getRacer("player");
+    const gap = player ? player.progress - aiProgress : 0;
+    const baseMax = MAX_SPEED * diff.paceMul;
+    const max = finishedRef.current
+      ? 0
+      : rubberBand(baseMax, gap, diff.rubberMax);
+
+    const { input } = computeAiInput({
+      curve: track.curve,
+      t,
+      posX: pos.x,
+      posZ: pos.z,
       yaw,
+      forwardSpeed,
+      baseMax: max,
+      trackLength,
+    });
+
+    applyKartForces(
+      rb,
+      input,
+      steerStateRef.current,
+      { maxSpeed: max, accelMul: 1, gripBase: 0.9 },
+      dt,
     );
 
-    rbRef.current.setNextKinematicTranslation({
-      x: pos.x,
-      y: pos.y + 0.05,
-      z: pos.z,
-    });
-    rbRef.current.setNextKinematicRotation({
-      x: q.x,
-      y: q.y,
-      z: q.z,
-      w: q.w,
-    });
+    // Lap counting — identical gate model to the player (gates.ts).
+    const gate = gates[nextGateRef.current];
+    const along = gateAlong(gate, pos.x, pos.z);
+    const prevAlong = gateAlongRef.current;
+    if (
+      prevAlong !== null &&
+      prevAlong < 0 &&
+      along >= 0 &&
+      gateLateral(gate, pos.x, pos.z) < gate.halfWidth
+    ) {
+      const crossed = nextGateRef.current;
+      nextGateRef.current = (crossed + 1) % gates.length;
+      gateAlongRef.current = gateAlong(
+        gates[nextGateRef.current],
+        pos.x,
+        pos.z,
+      );
+      if (crossed === 0) {
+        if (lapRef.current >= totalLaps) {
+          if (!finishedRef.current) {
+            finishedRef.current = true;
+            stampFinish(id, useGameStore.getState().totalRaceTime);
+          }
+        } else {
+          lapRef.current += 1;
+        }
+      }
+    } else {
+      gateAlongRef.current = along;
+    }
 
-    wheelRotRef.current += delta * speedT * 300;
+    updateProgress(id, lapRef.current, t);
+
+    // Cosmetic wheel spin.
+    wheelRotRef.current += forwardSpeed * dt * 0.5;
     if (wheelGroupRef.current) {
       wheelGroupRef.current.children.forEach((child) => {
         child.rotation.x = wheelRotRef.current;
@@ -100,10 +240,16 @@ export function AIOpponent({
   return (
     <RigidBody
       ref={rbRef}
-      type="kinematicPosition"
-      position={initialState.position}
-      rotation={initialState.rotation}
+      position={spawn.position}
+      rotation={spawn.rotation}
+      mass={CAR_MASS}
+      userData={{ isPlayer: false, aiId: id }}
       colliders={false}
+      linearDamping={0.3}
+      angularDamping={0.8}
+      enabledRotations={[false, true, false]}
+      restitution={0.3}
+      friction={0.7}
     >
       <mesh castShadow position={[0, 0.5, 0]}>
         <boxGeometry args={[1.8, 0.6, 3.5]} />
@@ -152,11 +298,19 @@ export function AIOpponent({
 
       <mesh position={[0.6, 0.6, -1.75]}>
         <boxGeometry args={[0.3, 0.15, 0.1]} />
-        <meshStandardMaterial color="#ff0000" emissive="#ff0000" emissiveIntensity={0.5} />
+        <meshStandardMaterial
+          color="#ff0000"
+          emissive="#ff0000"
+          emissiveIntensity={0.5}
+        />
       </mesh>
       <mesh position={[-0.6, 0.6, -1.75]}>
         <boxGeometry args={[0.3, 0.15, 0.1]} />
-        <meshStandardMaterial color="#ff0000" emissive="#ff0000" emissiveIntensity={0.5} />
+        <meshStandardMaterial
+          color="#ff0000"
+          emissive="#ff0000"
+          emissiveIntensity={0.5}
+        />
       </mesh>
 
       <mesh position={[0.91, 0.6, 0]}>

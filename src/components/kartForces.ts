@@ -41,7 +41,12 @@ export interface KartStepResult {
   pos: { x: number; y: number; z: number };
 }
 
-const yawFromQuat = (q: { x: number; y: number; z: number; w: number }): number =>
+export const yawFromQuat = (q: {
+  x: number;
+  y: number;
+  z: number;
+  w: number;
+}): number =>
   Math.atan2(2 * (q.w * q.y + q.x * q.z), 1 - 2 * (q.y * q.y + q.z * q.z));
 
 /**
