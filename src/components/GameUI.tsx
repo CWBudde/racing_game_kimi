@@ -135,6 +135,7 @@ export function GameUI() {
     totalLaps,
     playerPosition,
     racerCount,
+    raceResults,
     currentLapTime,
     totalRaceTime,
     bestLapTime,
@@ -165,6 +166,7 @@ export function GameUI() {
       totalLaps: state.totalLaps,
       playerPosition: state.playerPosition,
       racerCount: state.racerCount,
+      raceResults: state.raceResults,
       currentLapTime: state.currentLapTime,
       totalRaceTime: state.totalRaceTime,
       bestLapTime: state.bestLapTime,
@@ -427,6 +429,41 @@ export function GameUI() {
               </div>
             )}
           </div>
+
+          {raceResults.length > 0 && (
+            <div className="bg-black/30 p-4 rounded-lg mb-6 text-left">
+              <h3 className="text-yellow-400 font-bold mb-3 text-center">
+                Finishing Order
+              </h3>
+              <div className="space-y-1">
+                {raceResults.map((r) => (
+                  <div
+                    key={r.id}
+                    className={`flex items-center gap-2 px-2 py-1 rounded ${
+                      r.isPlayer ? "bg-white/15 font-bold" : ""
+                    }`}
+                  >
+                    <span className="text-gray-300 font-mono w-6">
+                      P{r.position}
+                    </span>
+                    <span
+                      className="w-3 h-3 rounded-sm shrink-0"
+                      style={{ backgroundColor: r.color }}
+                    />
+                    <span className="text-white flex-1">
+                      {r.isPlayer ? "You" : r.label}
+                    </span>
+                    <span className="text-gray-200 font-mono">
+                      {formatTime(r.totalTime)}
+                    </span>
+                    <span className="text-gray-400 font-mono text-sm w-16 text-right">
+                      {r.gap > 0 ? `+${r.gap.toFixed(2)}` : "—"}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className="mb-6">
             <HighScorePanel />
