@@ -71,7 +71,9 @@ export function RaceDirector() {
     for (const car of raceStandings.cars) {
       if (car.finishTime === null) {
         const laps = Math.max(car.progress, 0.001);
-        car.finishTime = (total * totalLaps) / laps;
+        // Route through stampFinish so all finish stamping stays in one place
+        // (its null-guard makes this a no-op if a real time was set meanwhile).
+        stampFinish(car.id, (total * totalLaps) / laps);
       }
     }
     recomputeStandings();

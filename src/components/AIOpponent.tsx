@@ -15,7 +15,12 @@ import {
   gateLateral,
   nearestPointIndex,
 } from "./gates";
-import { getRacer, stampFinish, updateProgress } from "../store/raceStandings";
+import {
+  getRacer,
+  seedProgress,
+  stampFinish,
+  updateProgress,
+} from "../store/raceStandings";
 
 interface AIOpponentProps {
   id: string;
@@ -167,7 +172,10 @@ export function AIOpponent({
       steerStateRef.current.current = 0;
       stuckTimerRef.current = 0;
       gateAlongRef.current = null;
-      updateProgress(id, lapRef.current, t);
+      // Teleport-safe: reseed the fraction (no wrap inference) and sync the
+      // stuck baseline so the next frame's delta reads ~0.
+      seedProgress(id, t);
+      lastProgressRef.current = getRacer(id)?.progress ?? lastProgressRef.current;
       return;
     }
 

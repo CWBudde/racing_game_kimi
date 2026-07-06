@@ -74,6 +74,17 @@ export function updateProgress(id: string, lap: number, fraction: number): void 
   car.lap = lap;
 }
 
+// Teleport-safe progress reseed. After a respawn snaps a car to a new point on
+// the centerline, its fraction can jump across the start/finish line; calling
+// updateProgress then would misread that jump as a lap wrap. Seed the stored
+// fraction (leaving `wraps` untouched) so the next updateProgress sees delta ≈ 0.
+export function seedProgress(id: string, fraction: number): void {
+  const car = getRacer(id);
+  if (!car) return;
+  car.frac = fraction;
+  car.progress = car.wraps + fraction;
+}
+
 export function stampFinish(id: string, finishTime: number): void {
   const car = getRacer(id);
   if (!car || car.finishTime !== null) return;

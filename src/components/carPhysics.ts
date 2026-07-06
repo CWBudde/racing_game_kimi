@@ -5,7 +5,7 @@ import * as THREE from "three";
 import { useGameStore } from "../store/gameStore";
 import { carTransform, seedCarTransform } from "../store/carTransform";
 import { getTrackLayout, getTrackStart, progressFraction } from "./trackData";
-import { updateProgress } from "../store/raceStandings";
+import { seedProgress, updateProgress } from "../store/raceStandings";
 import {
   ACCELERATION,
   BOOST_MULTIPLIER,
@@ -264,6 +264,9 @@ export function useCarPhysics() {
       steeringRef.current = 0;
       // Re-seed gate tracking so the teleport can't be read as a gate crossing.
       gateAlongRef.current = null;
+      // Teleport-safe progress: reseed the fraction (no wrap inference) so the
+      // next updateProgress doesn't misread the jump across the line as a lap.
+      seedProgress("player", idx / pts.length);
       respawnPressedRef.current = wantsRespawn;
       return;
     }
