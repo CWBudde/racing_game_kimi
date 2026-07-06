@@ -18,8 +18,8 @@ export const DIFFICULTY: Record<
   hard: { paceMul: 1.0, rubberMax: 0.12 },
 };
 
-const LOOKAHEAD_BASE = 9; // meters ahead on the line at rest (steering aim)
-const LOOKAHEAD_PER_MS = 0.7; // extra meters of steering lookahead per m/s
+const LOOKAHEAD_BASE = 5; // meters ahead on the line at rest (steering aim)
+const LOOKAHEAD_PER_MS = 0.35; // extra meters of steering lookahead per m/s
 const STEER_ERROR_SCALE = 0.7; // rad of yaw error that maps to full lock
 // The braking horizon must exceed the braking distance so a corner is seen in
 // time to slow for it: a fixed base plus a speed-squared term (v^2 / 2a, with a
@@ -76,7 +76,9 @@ export function computeAiInput(args: AiInputArgs): {
   const desiredYaw = Math.atan2(aim.x - posX, aim.z - posZ);
   let err = desiredYaw - yaw;
   err = Math.atan2(Math.sin(err), Math.cos(err));
-  const steer = Math.max(-1, Math.min(1, err / STEER_ERROR_SCALE));
+  // applyKartForces turns at a yaw rate of the OPPOSITE sign to `steer`
+  // (yawRate = -steer·…), so to reduce a positive error we steer negative.
+  const steer = Math.max(-1, Math.min(1, -err / STEER_ERROR_SCALE));
 
   // Curvature: how much the tangent turns between here and the braking horizon.
   // The horizon grows with braking distance so fast approaches see corners in
