@@ -146,6 +146,8 @@ export function GameUI() {
     hasItem,
     currentItem,
     activeEffect,
+    difficulty,
+    setDifficulty,
     openMainMenu,
     openRaceSetup,
     selectTrack,
@@ -174,6 +176,8 @@ export function GameUI() {
       hasItem: state.hasItem,
       currentItem: state.currentItem,
       activeEffect: state.activeEffect,
+      difficulty: state.difficulty,
+      setDifficulty: state.setDifficulty,
       openMainMenu: state.openMainMenu,
       openRaceSetup: state.openRaceSetup,
       selectTrack: state.selectTrack,
@@ -349,6 +353,25 @@ export function GameUI() {
               <div>
                 <span className="bg-gray-700 px-2 py-1 rounded">R</span> Respawn
               </div>
+            </div>
+          </div>
+
+          <div className="mb-6 text-left">
+            <h3 className="text-yellow-400 font-bold mb-2">Opponent Difficulty:</h3>
+            <div className="grid grid-cols-3 gap-2">
+              {(["easy", "normal", "hard"] as const).map((level) => (
+                <button
+                  key={level}
+                  onClick={() => setDifficulty(level)}
+                  className={`py-2 px-3 rounded-lg font-bold capitalize transition-all ${
+                    difficulty === level
+                      ? "bg-gradient-to-r from-cyan-500 to-fuchsia-500 text-white shadow-lg"
+                      : "bg-black/40 text-cyan-100 hover:bg-black/60"
+                  }`}
+                >
+                  {level}
+                </button>
+              ))}
             </div>
           </div>
 
