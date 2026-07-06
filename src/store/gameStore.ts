@@ -91,6 +91,19 @@ export interface ActiveEffect {
   remaining: number;
 }
 
+export type Difficulty = "easy" | "normal" | "hard";
+
+// One finishing-order row for the post-race results table (player + AI).
+export interface RaceResult {
+  id: string;
+  label: string;
+  color: string;
+  isPlayer: boolean;
+  position: number;
+  totalTime: number;
+  gap: number; // seconds behind the winner (0 for P1)
+}
+
 export const ITEM_POOLS: Record<string, ItemType[]> = {
   "coastal-gp": ["boost-refill", "speed-star", "time-bonus"],
   "desert-run": ["turbo", "grip-boost", "time-bonus"],
@@ -116,6 +129,7 @@ export interface GameState {
   gameOver: boolean;
   isCountingDown: boolean;
   selectedTrackId: string;
+  difficulty: Difficulty;
 
   // Race stats
   lap: number;
@@ -127,6 +141,11 @@ export interface GameState {
   highScoresByTrack: HighScoresByTrack;
   highScores: HighScoreEntry[]; // board for the currently selected track
   lastRaceRank: number | null;
+
+  // Live race vs AI
+  playerPosition: number; // 1-based, 0 before a race starts
+  racerCount: number; // total cars in the race (player + AI)
+  raceResults: RaceResult[]; // finishing order, populated at race end
 
   // Car stats
   speed: number;
@@ -140,6 +159,9 @@ export interface GameState {
   openMainMenu: () => void;
   openRaceSetup: () => void;
   selectTrack: (trackId: string) => void;
+  setDifficulty: (difficulty: Difficulty) => void;
+  updateRacePosition: (position: number, count: number) => void;
+  setRaceResults: (results: RaceResult[]) => void;
   beginCountdown: () => void;
   startGame: () => void;
   pauseGame: () => void;
@@ -170,6 +192,9 @@ const resetRaceState = (trackId: string) => {
     totalRaceTime: 0,
     bestLapTime: null,
     lastRaceRank: null,
+    playerPosition: 0,
+    racerCount: 0,
+    raceResults: [],
     speed: 0,
     boostAmount: 100,
     hasItem: false,
@@ -189,6 +214,7 @@ export const useGameStore = create<GameState>()(
     gameOver: false,
     isCountingDown: false,
     selectedTrackId: initialTrackId,
+    difficulty: "normal",
 
     lap: 1,
     totalLaps: initialTrack?.laps ?? 3,
@@ -199,6 +225,9 @@ export const useGameStore = create<GameState>()(
     highScoresByTrack: initialHighScores,
     highScores: getTrackScores(initialHighScores, initialTrackId),
     lastRaceRank: null,
+    playerPosition: 0,
+    racerCount: 0,
+    raceResults: [],
 
     speed: 0,
     maxSpeed: TOP_SPEED_KMH,
@@ -237,6 +266,13 @@ export const useGameStore = create<GameState>()(
         highScores: getTrackScores(state.highScoresByTrack, trackId),
       }));
     },
+
+    setDifficulty: (difficulty) => set({ difficulty }),
+
+    updateRacePosition: (position, count) =>
+      set({ playerPosition: position, racerCount: count }),
+
+    setRaceResults: (results) => set({ raceResults: results }),
 
     beginCountdown: () =>
       set((state) => ({
