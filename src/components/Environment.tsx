@@ -1,5 +1,6 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useFrame } from "@react-three/fiber";
+import { Instance, Instances } from "@react-three/drei";
 import {
   CuboidCollider,
   RigidBody,
@@ -7,56 +8,163 @@ import {
 } from "@react-three/rapier";
 import * as THREE from "three";
 import { getTrackLayout } from "./trackData";
+import { carTransform } from "../store/carTransform";
 import { ITEM_POOLS, type ItemType, useGameStore } from "../store/gameStore";
 
-function Tree({
-  position,
-  scale = 1,
+// A single shadow-casting sun that tracks the player car with a tight frustum.
+//
+// Previously each theme lit the scene with a 2048² directional light covering a
+// static 560 m frustum, so the shadow map was stretched thin across the whole
+// world and every distant tree/barrier rendered into it. By anchoring the light
+// (and its target) to the car each frame we can use a small, crisp frustum: only
+// near geometry falls inside it, which both sharpens shadows and lets the
+// renderer cull far casters for free.
+function FollowSun({
+  color,
+  intensity,
+  offset,
+  extent = 90,
+  mapSize = 1024,
 }: {
-  position: [number, number, number];
-  scale?: number;
+  color?: string;
+  intensity: number;
+  offset: [number, number, number];
+  extent?: number;
+  mapSize?: number;
 }) {
+  const lightRef = useRef<THREE.DirectionalLight>(null);
+  const targetRef = useRef<THREE.Object3D>(null);
+
+  useEffect(() => {
+    if (lightRef.current && targetRef.current) {
+      lightRef.current.target = targetRef.current;
+    }
+  }, []);
+
+  useFrame(() => {
+    const light = lightRef.current;
+    const target = targetRef.current;
+    if (!light || !target) return;
+    const { x, y, z } = carTransform;
+    light.position.set(x + offset[0], y + offset[1], z + offset[2]);
+    target.position.set(x, y, z);
+    target.updateMatrixWorld();
+  });
+
+  const far =
+    Math.hypot(offset[0], offset[1], offset[2]) + extent * 2;
+
   return (
-    <RigidBody type="fixed" position={position} colliders={false}>
-      <mesh castShadow position={[0, 1.5 * scale, 0]}>
-        <cylinderGeometry args={[0.3 * scale, 0.4 * scale, 3 * scale, 8]} />
-        <meshStandardMaterial color="#8B4513" />
-      </mesh>
-      <CuboidCollider
-        args={[0.3 * scale, 1.5 * scale, 0.3 * scale]}
-        position={[0, 1.5 * scale, 0]}
+    <>
+      <directionalLight
+        ref={lightRef}
+        intensity={intensity}
+        color={color}
+        castShadow
+        shadow-mapSize-width={mapSize}
+        shadow-mapSize-height={mapSize}
+        shadow-bias={-0.0004}
+        shadow-camera-near={1}
+        shadow-camera-far={far}
+        shadow-camera-left={-extent}
+        shadow-camera-right={extent}
+        shadow-camera-top={extent}
+        shadow-camera-bottom={-extent}
       />
-      <mesh castShadow position={[0, 3.5 * scale, 0]}>
-        <coneGeometry args={[2 * scale, 2.5 * scale, 8]} />
-        <meshStandardMaterial color="#228B22" />
-      </mesh>
-      <mesh castShadow position={[0, 4.8 * scale, 0]}>
-        <coneGeometry args={[1.5 * scale, 2 * scale, 8]} />
-        <meshStandardMaterial color="#32CD32" />
-      </mesh>
-      <mesh castShadow position={[0, 5.8 * scale, 0]}>
-        <coneGeometry args={[0.8 * scale, 1.5 * scale, 8]} />
-        <meshStandardMaterial color="#90EE90" />
-      </mesh>
-    </RigidBody>
+      <object3D ref={targetRef} />
+    </>
   );
 }
 
-function Rock({
-  position,
-  scale = 1,
-}: {
-  position: [number, number, number];
-  scale?: number;
-}) {
+type Placement = { position: [number, number, number]; scale: number };
+
+// Trees rendered as four InstancedMeshes (trunk + three foliage cones) instead
+// of ~100 RigidBodies with 4 meshes each. All trunk colliders share one fixed
+// body. A per-instance uniform scale + y-offset reproduces the old per-tree
+// geometry exactly (the base geometry is the scale-1 tree).
+function TreeField({ trees }: { trees: Placement[] }) {
+  if (trees.length === 0) return null;
   return (
-    <RigidBody type="fixed" position={position} colliders={false}>
-      <mesh castShadow>
-        <dodecahedronGeometry args={[scale, 0]} />
+    <>
+      <Instances limit={trees.length} castShadow>
+        <cylinderGeometry args={[0.3, 0.4, 3, 8]} />
+        <meshStandardMaterial color="#8B4513" />
+        {trees.map((t, i) => (
+          <Instance
+            key={i}
+            position={[t.position[0], 1.5 * t.scale, t.position[2]]}
+            scale={t.scale}
+          />
+        ))}
+      </Instances>
+      <Instances limit={trees.length} castShadow>
+        <coneGeometry args={[2, 2.5, 8]} />
+        <meshStandardMaterial color="#228B22" />
+        {trees.map((t, i) => (
+          <Instance
+            key={i}
+            position={[t.position[0], 3.5 * t.scale, t.position[2]]}
+            scale={t.scale}
+          />
+        ))}
+      </Instances>
+      <Instances limit={trees.length} castShadow>
+        <coneGeometry args={[1.5, 2, 8]} />
+        <meshStandardMaterial color="#32CD32" />
+        {trees.map((t, i) => (
+          <Instance
+            key={i}
+            position={[t.position[0], 4.8 * t.scale, t.position[2]]}
+            scale={t.scale}
+          />
+        ))}
+      </Instances>
+      <Instances limit={trees.length} castShadow>
+        <coneGeometry args={[0.8, 1.5, 8]} />
+        <meshStandardMaterial color="#90EE90" />
+        {trees.map((t, i) => (
+          <Instance
+            key={i}
+            position={[t.position[0], 5.8 * t.scale, t.position[2]]}
+            scale={t.scale}
+          />
+        ))}
+      </Instances>
+      <RigidBody type="fixed" colliders={false}>
+        {trees.map((t, i) => (
+          <CuboidCollider
+            key={i}
+            args={[0.3 * t.scale, 1.5 * t.scale, 0.3 * t.scale]}
+            position={[t.position[0], 1.5 * t.scale, t.position[2]]}
+          />
+        ))}
+      </RigidBody>
+    </>
+  );
+}
+
+// Rocks as a single InstancedMesh with one shared collider body.
+function RockField({ rocks }: { rocks: Placement[] }) {
+  if (rocks.length === 0) return null;
+  return (
+    <>
+      <Instances limit={rocks.length} castShadow>
+        <dodecahedronGeometry args={[1, 0]} />
         <meshStandardMaterial color="#808080" roughness={0.9} />
-      </mesh>
-      <CuboidCollider args={[scale * 0.8, scale * 0.6, scale * 0.8]} />
-    </RigidBody>
+        {rocks.map((r, i) => (
+          <Instance key={i} position={r.position} scale={r.scale} />
+        ))}
+      </Instances>
+      <RigidBody type="fixed" colliders={false}>
+        {rocks.map((r, i) => (
+          <CuboidCollider
+            key={i}
+            args={[r.scale * 0.8, r.scale * 0.6, r.scale * 0.8]}
+            position={r.position}
+          />
+        ))}
+      </RigidBody>
+    </>
   );
 }
 
@@ -269,6 +377,28 @@ function Drone({
 
 const RESPAWN_TIME = 5;
 
+// The "?" plate on classic/desert item boxes is identical for every box, so
+// build it once and share it instead of allocating a canvas + texture per box
+// (previously an inline IIFE rebuilt it on every render).
+let questionCanvas: HTMLCanvasElement | null = null;
+function getQuestionCanvas(): HTMLCanvasElement {
+  if (!questionCanvas) {
+    const canvas = document.createElement("canvas");
+    canvas.width = 64;
+    canvas.height = 64;
+    const ctx = canvas.getContext("2d")!;
+    ctx.fillStyle = "#ffdd00";
+    ctx.fillRect(0, 0, 64, 64);
+    ctx.fillStyle = "#000000";
+    ctx.font = "bold 45px Arial";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("?", 32, 32);
+    questionCanvas = canvas;
+  }
+  return questionCanvas;
+}
+
 function seededRandom(seed: number): number {
   const value = Math.sin(seed * 12.9898) * 43758.5453;
   return value - Math.floor(value);
@@ -368,23 +498,7 @@ function ItemBox({
           <mesh position={[0, 0, 0.79]}>
             <planeGeometry args={[0.8, 0.8]} />
             <meshBasicMaterial color="#000000">
-              <canvasTexture
-                attach="map"
-                image={(() => {
-                  const canvas = document.createElement("canvas");
-                  canvas.width = 64;
-                  canvas.height = 64;
-                  const ctx = canvas.getContext("2d")!;
-                  ctx.fillStyle = "#ffdd00";
-                  ctx.fillRect(0, 0, 64, 64);
-                  ctx.fillStyle = "#000000";
-                  ctx.font = "bold 45px Arial";
-                  ctx.textAlign = "center";
-                  ctx.textBaseline = "middle";
-                  ctx.fillText("?", 32, 32);
-                  return canvas;
-                })()}
-              />
+              <canvasTexture attach="map" image={getQuestionCanvas()} />
             </meshBasicMaterial>
           </mesh>
         )}
@@ -586,15 +700,9 @@ export function Environment({ trackId }: EnvironmentProps) {
 
   return (
     <group>
-      {!isNeon &&
-        trees.map((tree, i) => (
-          <Tree key={`tree-${i}`} position={tree.position} scale={tree.scale} />
-        ))}
+      {!isNeon && <TreeField key={`trees-${trackId}`} trees={trees} />}
 
-      {!isNeon &&
-        rocks.map((rock, i) => (
-          <Rock key={`rock-${i}`} position={rock.position} scale={rock.scale} />
-        ))}
+      {!isNeon && <RockField key={`rocks-${trackId}`} rocks={rocks} />}
 
       {!isNeon &&
         clouds.map((cloud, i) => (
@@ -715,7 +823,6 @@ export function Environment({ trackId }: EnvironmentProps) {
             penumbra={0.7}
             intensity={140}
             color="#00dfff"
-            castShadow
             distance={420}
           />
           <spotLight
@@ -726,18 +833,10 @@ export function Environment({ trackId }: EnvironmentProps) {
             color="#ff46d5"
             distance={420}
           />
-          <directionalLight
-            position={[80, 110, -20]}
-            intensity={0.45}
+          <FollowSun
             color="#8eb7ff"
-            castShadow
-            shadow-mapSize-width={2048}
-            shadow-mapSize-height={2048}
-            shadow-camera-far={700}
-            shadow-camera-left={-280}
-            shadow-camera-right={280}
-            shadow-camera-top={280}
-            shadow-camera-bottom={-280}
+            intensity={0.45}
+            offset={[80, 110, -20]}
           />
           <ambientLight intensity={0.32} color="#5d79ff" />
           <hemisphereLight args={["#12254f", "#05070d", 0.55]} />
@@ -748,18 +847,7 @@ export function Environment({ trackId }: EnvironmentProps) {
             <sphereGeometry args={[20, 32, 32]} />
             <meshBasicMaterial color={isDesert ? "#ffd27a" : "#ffdd44"} />
           </mesh>
-          <directionalLight
-            position={[200, 120, -200]}
-            intensity={1.2}
-            castShadow
-            shadow-mapSize-width={2048}
-            shadow-mapSize-height={2048}
-            shadow-camera-far={700}
-            shadow-camera-left={-280}
-            shadow-camera-right={280}
-            shadow-camera-top={280}
-            shadow-camera-bottom={-280}
-          />
+          <FollowSun intensity={1.2} offset={[120, 120, -120]} />
           <ambientLight intensity={0.4} />
           <hemisphereLight
             args={[

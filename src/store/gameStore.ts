@@ -1,12 +1,11 @@
 import { create } from "zustand";
 import { subscribeWithSelector } from "zustand/middleware";
-import { DEFAULT_TRACK_ID, getTrackStart, TRACKS } from "../components/trackData";
+import { DEFAULT_TRACK_ID, TRACKS } from "../components/trackData";
 import { TOP_SPEED_KMH } from "../components/carConstants";
 
 const HIGHSCORE_STORAGE_KEY = "kart-racing-highscores";
 const initialTrack = TRACKS.find((track) => track.id === DEFAULT_TRACK_ID) ?? TRACKS[0];
 const initialTrackId = initialTrack?.id ?? DEFAULT_TRACK_ID;
-const initialTrackStart = getTrackStart(initialTrackId);
 
 export interface HighScoreEntry {
   id: string;
@@ -137,10 +136,6 @@ export interface GameState {
   currentItem: ItemType | null;
   activeEffect: ActiveEffect | null;
 
-  // Position
-  carPosition: [number, number, number];
-  carRotation: [number, number, number];
-
   // Actions
   openMainMenu: () => void;
   openRaceSetup: () => void;
@@ -162,13 +157,10 @@ export interface GameState {
   useItem: () => void;
   collectItem: (item: ItemType) => void;
   updateActiveEffect: (delta: number) => void;
-  updateCarPosition: (position: [number, number, number]) => void;
-  updateCarRotation: (rotation: [number, number, number]) => void;
 }
 
 const resetRaceState = (trackId: string) => {
   const track = TRACKS.find((entry) => entry.id === trackId);
-  const trackStart = getTrackStart(trackId);
 
   return {
     lap: 1,
@@ -183,8 +175,6 @@ const resetRaceState = (trackId: string) => {
     hasItem: false,
     currentItem: null,
     activeEffect: null,
-    carPosition: trackStart.position,
-    carRotation: [0, trackStart.yaw, 0] as [number, number, number],
   };
 };
 
@@ -216,9 +206,6 @@ export const useGameStore = create<GameState>()(
     hasItem: false,
     currentItem: null,
     activeEffect: null,
-
-    carPosition: initialTrackStart.position,
-    carRotation: [0, initialTrackStart.yaw, 0],
 
     openMainMenu: () =>
       set((state) => ({
@@ -397,8 +384,5 @@ export const useGameStore = create<GameState>()(
         set({ activeEffect: { ...state.activeEffect, remaining } });
       }
     },
-
-    updateCarPosition: (position) => set({ carPosition: position }),
-    updateCarRotation: (rotation) => set({ carRotation: rotation }),
   })),
 );

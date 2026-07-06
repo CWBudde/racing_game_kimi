@@ -14,7 +14,10 @@ import { useGameStore } from "./store/gameStore";
 import "./App.css";
 
 function GameScene() {
-  const { updateLapTime, selectedTrackId } = useGameStore();
+  // Selector reads only — subscribing to the whole store would re-render the
+  // entire 3D scene on every per-frame timer tick.
+  const updateLapTime = useGameStore((state) => state.updateLapTime);
+  const selectedTrackId = useGameStore((state) => state.selectedTrackId);
   const trackLayout = getTrackLayout(selectedTrackId);
   const playerStart = getTrackStart(selectedTrackId);
   const isNeon = trackLayout.definition.theme === "neon";
@@ -94,7 +97,10 @@ function GameScene() {
 }
 
 function App() {
-  const { isPlaying, isPaused, pauseGame, resumeGame } = useGameStore();
+  const isPlaying = useGameStore((state) => state.isPlaying);
+  const isPaused = useGameStore((state) => state.isPaused);
+  const pauseGame = useGameStore((state) => state.pauseGame);
+  const resumeGame = useGameStore((state) => state.resumeGame);
 
   // Handle ESC key for pause
   const handleKeyDown = useCallback(

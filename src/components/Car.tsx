@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { RigidBody, CuboidCollider } from "@react-three/rapier";
 import { useCarPhysics, CAR_MASS } from "./carPhysics";
 
@@ -6,7 +7,24 @@ interface CarProps {
 }
 
 export function Car({ position = [0, 2, 0] }: CarProps) {
-  const { carRef, chassisRef, wheelsRef, localSpeed } = useCarPhysics();
+  const { carRef, chassisRef, wheelsRef, exhaustRef } = useCarPhysics();
+
+  // Built once — previously an inline IIFE in JSX rebuilt a canvas + texture on
+  // every render (and the car re-rendered every frame before P1).
+  const numberCanvas = useMemo(() => {
+    const canvas = document.createElement("canvas");
+    canvas.width = 64;
+    canvas.height = 64;
+    const ctx = canvas.getContext("2d")!;
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, 64, 64);
+    ctx.fillStyle = "#000000";
+    ctx.font = "bold 40px Arial";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("1", 32, 32);
+    return canvas;
+  }, []);
 
   return (
     <RigidBody
@@ -126,45 +144,13 @@ export function Car({ position = [0, 2, 0] }: CarProps) {
         <mesh position={[0.91, 0.6, 0]}>
           <planeGeometry args={[0.4, 0.4]} />
           <meshBasicMaterial color="#ffffff">
-            <canvasTexture
-              attach="map"
-              image={(() => {
-                const canvas = document.createElement("canvas");
-                canvas.width = 64;
-                canvas.height = 64;
-                const ctx = canvas.getContext("2d")!;
-                ctx.fillStyle = "#ffffff";
-                ctx.fillRect(0, 0, 64, 64);
-                ctx.fillStyle = "#000000";
-                ctx.font = "bold 40px Arial";
-                ctx.textAlign = "center";
-                ctx.textBaseline = "middle";
-                ctx.fillText("1", 32, 32);
-                return canvas;
-              })()}
-            />
+            <canvasTexture attach="map" image={numberCanvas} />
           </meshBasicMaterial>
         </mesh>
         <mesh position={[-0.91, 0.6, 0]} rotation={[0, Math.PI, 0]}>
           <planeGeometry args={[0.4, 0.4]} />
           <meshBasicMaterial color="#ffffff">
-            <canvasTexture
-              attach="map"
-              image={(() => {
-                const canvas = document.createElement("canvas");
-                canvas.width = 64;
-                canvas.height = 64;
-                const ctx = canvas.getContext("2d")!;
-                ctx.fillStyle = "#ffffff";
-                ctx.fillRect(0, 0, 64, 64);
-                ctx.fillStyle = "#000000";
-                ctx.font = "bold 40px Arial";
-                ctx.textAlign = "center";
-                ctx.textBaseline = "middle";
-                ctx.fillText("1", 32, 32);
-                return canvas;
-              })()}
-            />
+            <canvasTexture attach="map" image={numberCanvas} />
           </meshBasicMaterial>
         </mesh>
       </group>
@@ -212,23 +198,18 @@ export function Car({ position = [0, 2, 0] }: CarProps) {
       {/* Car collider */}
       <CuboidCollider args={[0.9, 0.5, 1.75]} position={[0, 0.6, 0]} />
 
-      {/* Exhaust particles */}
-      {localSpeed > 5 && (
-        <>
-          <group position={[0.4, 0.3, -1.8]}>
-            <mesh>
-              <sphereGeometry args={[0.08, 8, 8]} />
-              <meshBasicMaterial color="#888888" transparent opacity={0.5} />
-            </mesh>
-          </group>
-          <group position={[-0.4, 0.3, -1.8]}>
-            <mesh>
-              <sphereGeometry args={[0.08, 8, 8]} />
-              <meshBasicMaterial color="#888888" transparent opacity={0.5} />
-            </mesh>
-          </group>
-        </>
-      )}
+      {/* Exhaust particles — always mounted; the physics loop toggles the
+          group's visibility by speed (a ref write, no React re-render). */}
+      <group ref={exhaustRef} visible={false}>
+        <mesh position={[0.4, 0.3, -1.8]}>
+          <sphereGeometry args={[0.08, 8, 8]} />
+          <meshBasicMaterial color="#888888" transparent opacity={0.5} />
+        </mesh>
+        <mesh position={[-0.4, 0.3, -1.8]}>
+          <sphereGeometry args={[0.08, 8, 8]} />
+          <meshBasicMaterial color="#888888" transparent opacity={0.5} />
+        </mesh>
+      </group>
     </RigidBody>
   );
 }

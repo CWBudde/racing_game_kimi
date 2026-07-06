@@ -1,10 +1,12 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import { type RapierRigidBody } from "@react-three/rapier";
 import * as THREE from "three";
 import { useGameStore } from "../store/gameStore";
-import { getTrackLayout } from "./trackData";
+import { carTransform, seedCarTransform } from "../store/carTransform";
+import { getTrackLayout, getTrackStart } from "./trackData";
 import { BOOST_MULTIPLIER, MAX_SPEED } from "./carConstants";
+import { smoothAlpha } from "./smoothing";
 
 export const keys = {
   w: false,
@@ -229,42 +231,49 @@ export function useCarPhysics() {
   const carRef = useRef<RapierRigidBody>(null);
   const chassisRef = useRef<THREE.Group>(null);
   const wheelsRef = useRef<THREE.Group>(null);
+  const exhaustRef = useRef<THREE.Group>(null);
   const steeringRef = useRef(0);
 
-  const {
-    isPlaying,
-    isPaused,
-    selectedTrackId,
-    updateSpeed,
-    updateCarPosition,
-    updateCarRotation,
-    boostAmount,
-    updateBoost,
-    completeLap,
-    activeEffect,
-    updateActiveEffect,
-  } = useGameStore();
-
-  const triggerItem = useGameStore((state) => state.useItem);
+  // Subscribe only to the low-frequency flags that must drive React re-renders /
+  // effects. Everything read per frame (boost, active effect) and every action
+  // is pulled from `useGameStore.getState()` inside the frame loop, so the
+  // physics loop never re-renders the Car component.
+  const isPlaying = useGameStore((state) => state.isPlaying);
+  const isPaused = useGameStore((state) => state.isPaused);
+  const isCountingDown = useGameStore((state) => state.isCountingDown);
+  const selectedTrackId = useGameStore((state) => state.selectedTrackId);
 
   const nextGateRef = useRef(1);
   const gateAlongRef = useRef<number | null>(null);
   const useItemPressedRef = useRef(false);
   const respawnPressedRef = useRef(false);
+  // Accumulates frame time so the HUD speedometer store write happens at ~10 Hz
+  // instead of 60 Hz — the gauge doesn't need per-frame precision and each write
+  // re-renders the HUD DOM.
+  const hudAccumRef = useRef(0);
 
-  const [localSpeed, setLocalSpeed] = useState(0);
   const trackLayout = getTrackLayout(selectedTrackId);
   const gates = useMemo(
     () => buildGates(trackLayout.points, trackLayout.width),
     [trackLayout],
   );
 
-  // Restart the gate sequence whenever a race begins (or the track changes).
-  // The car starts on the start/finish line, so the first gate to clear is #1.
+  // Seed the transient pose as soon as the countdown begins (not just when the
+  // race starts), so the car-following sun and camera anchor to the grid for the
+  // whole countdown instead of reading the default (0,0,0) transform.
+  useEffect(() => {
+    if (isPlaying || isCountingDown) {
+      const start = getTrackStart(selectedTrackId);
+      seedCarTransform(start.position, start.yaw);
+    }
+  }, [isPlaying, isCountingDown, selectedTrackId]);
+
+  // Restart the gate sequence and HUD cadence when a race actually starts.
   useEffect(() => {
     if (isPlaying) {
       nextGateRef.current = 1;
       gateAlongRef.current = null;
+      hudAccumRef.current = 0;
     }
   }, [isPlaying, selectedTrackId]);
 
@@ -319,6 +328,10 @@ export function useCarPhysics() {
     respawnPressedRef.current = wantsRespawn;
 
     const dt = Math.min(delta, 0.05);
+    // Per-frame store reads/actions go through getState() so this loop never
+    // subscribes to (and re-renders on) store changes.
+    const store = useGameStore.getState();
+    const { boostAmount, activeEffect } = store;
     const car = carRef.current;
     const currentVel = car.linvel();
     const currentRot = car.rotation();
@@ -340,12 +353,12 @@ export function useCarPhysics() {
     const useItemPressed = keys.e || gamepadInput.useItemBtn;
 
     if (useItemPressed && !useItemPressedRef.current) {
-      triggerItem();
+      store.useItem();
     }
     useItemPressedRef.current = useItemPressed;
 
     if (activeEffect) {
-      updateActiveEffect(dt);
+      store.updateActiveEffect(dt);
     }
 
     const hasSpeedStar = activeEffect?.type === "speed-star";
@@ -363,7 +376,7 @@ export function useCarPhysics() {
     if (throttleInput > 0) {
       const boost = boostActive && boostAmount > 0 ? BOOST_MULTIPLIER : 1;
       if (boostActive && boostAmount > 0) {
-        updateBoost(boostAmount - dt * 20);
+        store.updateBoost(boostAmount - dt * 20);
       }
       if (forwardSpeed < effectiveMaxSpeed * boost) {
         acceleration = ACCELERATION * boost * throttleInput;
@@ -450,7 +463,7 @@ export function useCarPhysics() {
       currentRot.z,
       currentRot.w,
     );
-    currentQuat.slerp(uprightRot, 0.3);
+    currentQuat.slerp(uprightRot, smoothAlpha(0.3, dt));
     car.setRotation(
       {
         x: currentQuat.x,
@@ -486,7 +499,7 @@ export function useCarPhysics() {
         );
         // Gate 0 is the start/finish line: crossing it closes a lap.
         if (crossed === 0) {
-          completeLap();
+          store.completeLap();
         }
       } else {
         gateAlongRef.current = along;
@@ -496,13 +509,31 @@ export function useCarPhysics() {
     const pos = car.translation();
     const finalYaw = getYawFromQuaternion(car.rotation());
     const speedKmh = Math.abs(forwardSpeed) * 3.6;
-    updateSpeed(speedKmh);
-    setLocalSpeed(speedKmh);
-    updateCarPosition([pos.x, pos.y, pos.z]);
-    updateCarRotation([0, finalYaw, 0]);
+
+    // Transient pose for the camera — written every frame, no re-render.
+    carTransform.x = pos.x;
+    carTransform.y = pos.y;
+    carTransform.z = pos.z;
+    carTransform.yaw = finalYaw;
+    carTransform.speedKmh = speedKmh;
+
+    // Toggle exhaust visibility directly instead of via React state, which used
+    // to re-render the whole car mesh tree every frame.
+    if (exhaustRef.current) {
+      exhaustRef.current.visible = speedKmh > 5;
+    }
+
+    // Push the speedometer value to the store at ~10 Hz for the HUD. Subtract
+    // the interval (rather than resetting to 0) so leftover delta carries into
+    // the next window and the cadence doesn't drift with variable frame times.
+    hudAccumRef.current += dt;
+    if (hudAccumRef.current >= 0.1) {
+      hudAccumRef.current -= 0.1;
+      store.updateSpeed(speedKmh);
+    }
 
     if (!boostActive && boostAmount < 100) {
-      updateBoost(boostAmount + dt * 5);
+      store.updateBoost(boostAmount + dt * 5);
     }
 
     if (wheelsRef.current) {
@@ -521,12 +552,13 @@ export function useCarPhysics() {
         Math.max(currentSteering * speed * 0.002, -0.1),
         0.1,
       );
+      const tiltAlpha = smoothAlpha(0.1, dt);
       chassisRef.current.rotation.x +=
-        (tiltX - chassisRef.current.rotation.x) * 0.1;
+        (tiltX - chassisRef.current.rotation.x) * tiltAlpha;
       chassisRef.current.rotation.z +=
-        (tiltZ - chassisRef.current.rotation.z) * 0.1;
+        (tiltZ - chassisRef.current.rotation.z) * tiltAlpha;
     }
   });
 
-  return { carRef, chassisRef, wheelsRef, localSpeed };
+  return { carRef, chassisRef, wheelsRef, exhaustRef };
 }

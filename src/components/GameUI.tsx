@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useShallow } from "zustand/react/shallow";
 import { TRACKS } from "./trackData";
 import { ITEM_INFO, useGameStore } from "../store/gameStore";
 
@@ -77,7 +78,13 @@ const formatTime = (seconds: number): string => {
 };
 
 function HighScorePanel() {
-  const { highScores, lastRaceRank, selectedTrackId } = useGameStore();
+  const { highScores, lastRaceRank, selectedTrackId } = useGameStore(
+    useShallow((state) => ({
+      highScores: state.highScores,
+      lastRaceRank: state.lastRaceRank,
+      selectedTrackId: state.selectedTrackId,
+    })),
+  );
   const track = TRACKS.find((t) => t.id === selectedTrackId);
 
   return (
@@ -143,7 +150,34 @@ export function GameUI() {
     beginCountdown,
     pauseGame,
     resumeGame,
-  } = useGameStore();
+  } = useGameStore(
+    useShallow((state) => ({
+      showMainMenu: state.showMainMenu,
+      isPlaying: state.isPlaying,
+      isPaused: state.isPaused,
+      gameOver: state.gameOver,
+      isCountingDown: state.isCountingDown,
+      lap: state.lap,
+      totalLaps: state.totalLaps,
+      currentLapTime: state.currentLapTime,
+      totalRaceTime: state.totalRaceTime,
+      bestLapTime: state.bestLapTime,
+      lastRaceRank: state.lastRaceRank,
+      selectedTrackId: state.selectedTrackId,
+      speed: state.speed,
+      maxSpeed: state.maxSpeed,
+      boostAmount: state.boostAmount,
+      hasItem: state.hasItem,
+      currentItem: state.currentItem,
+      activeEffect: state.activeEffect,
+      openMainMenu: state.openMainMenu,
+      openRaceSetup: state.openRaceSetup,
+      selectTrack: state.selectTrack,
+      beginCountdown: state.beginCountdown,
+      pauseGame: state.pauseGame,
+      resumeGame: state.resumeGame,
+    })),
+  );
   const selectedTrack =
     TRACKS.find((track) => track.id === selectedTrackId) ?? TRACKS[0];
 

@@ -87,6 +87,33 @@ export function Track({ trackId }: TrackProps) {
 
   const groundGeometry = useMemo(() => new THREE.PlaneGeometry(1400, 1400, 1, 1), []);
 
+  // Start/finish checkerboard — built once per theme instead of in an inline
+  // IIFE that rebuilt a canvas + texture on every render.
+  const startLineTexture = useMemo(() => {
+    const canvas = document.createElement("canvas");
+    canvas.width = 256;
+    canvas.height = 96;
+    const ctx = canvas.getContext("2d")!;
+    ctx.fillStyle = "#080c18";
+    ctx.fillRect(0, 0, 256, 96);
+    for (let r = 0; r < 3; r++) {
+      for (let c = 0; c < 8; c++) {
+        ctx.fillStyle = isNeon
+          ? (r + c) % 2 === 0
+            ? "#00f0ff"
+            : "#ff3ccf"
+          : (r + c) % 2 === 0
+            ? "#ffffff"
+            : "#000000";
+        ctx.fillRect(c * 32, r * 32, 32, 32);
+      }
+    }
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = 3;
+    ctx.strokeRect(1.5, 1.5, 253, 93);
+    return new THREE.CanvasTexture(canvas);
+  }, [isNeon]);
+
   const checkpoints = useMemo(() => {
     const cp: {
       position: [number, number, number];
@@ -193,10 +220,32 @@ export function Track({ trackId }: TrackProps) {
         );
       })}
 
+      {/* Barrier colliders — consolidated from ~260 individual RigidBodies into
+          two fixed bodies (one per side), each holding a CuboidCollider per
+          segment. Rapier handles many colliders per body cheaply; a body each
+          was pure overhead. Visual meshes are rendered separately below. */}
+      <RigidBody type="fixed" colliders={false}>
+        {leftBarrierSegments.map((seg, i) => (
+          <CuboidCollider
+            key={`barrier-left-col-${i}`}
+            args={[0.275, 0.7, seg.length / 2]}
+            position={[seg.position.x, 0.8, seg.position.z]}
+            rotation={[0, seg.angle, 0]}
+          />
+        ))}
+        {rightBarrierSegments.map((seg, i) => (
+          <CuboidCollider
+            key={`barrier-right-col-${i}`}
+            args={[0.275, 0.7, seg.length / 2]}
+            position={[seg.position.x, 0.8, seg.position.z]}
+            rotation={[0, seg.angle, 0]}
+          />
+        ))}
+      </RigidBody>
+
       {leftBarrierSegments.map((seg, i) => (
-        <RigidBody
+        <group
           key={`barrier-left-${i}`}
-          type="fixed"
           position={[seg.position.x, 0.8, seg.position.z]}
           rotation={[0, seg.angle, 0]}
         >
@@ -220,14 +269,12 @@ export function Track({ trackId }: TrackProps) {
               />
             </mesh>
           )}
-          <CuboidCollider args={[0.275, 0.7, seg.length / 2]} />
-        </RigidBody>
+        </group>
       ))}
 
       {rightBarrierSegments.map((seg, i) => (
-        <RigidBody
+        <group
           key={`barrier-right-${i}`}
-          type="fixed"
           position={[seg.position.x, 0.8, seg.position.z]}
           rotation={[0, seg.angle, 0]}
         >
@@ -251,8 +298,7 @@ export function Track({ trackId }: TrackProps) {
               />
             </mesh>
           )}
-          <CuboidCollider args={[0.275, 0.7, seg.length / 2]} />
-        </RigidBody>
+        </group>
       ))}
 
       <group ref={checkpointsRef}>
@@ -310,33 +356,10 @@ export function Track({ trackId }: TrackProps) {
         <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
           <planeGeometry args={[layout.width, 8]} />
           <meshStandardMaterial
+            map={startLineTexture}
             emissive={isNeon ? "#1f2550" : "#000000"}
             emissiveIntensity={isNeon ? 0.35 : 0}
-          >
-            <canvasTexture
-              attach="map"
-              image={(() => {
-                const canvas = document.createElement("canvas");
-                canvas.width = 256;
-                canvas.height = 96;
-                const ctx = canvas.getContext("2d")!;
-                ctx.fillStyle = "#080c18";
-                ctx.fillRect(0, 0, 256, 96);
-                for (let r = 0; r < 3; r++) {
-                  for (let c = 0; c < 8; c++) {
-                    ctx.fillStyle = isNeon
-                      ? (r + c) % 2 === 0 ? "#00f0ff" : "#ff3ccf"
-                      : (r + c) % 2 === 0 ? "#ffffff" : "#000000";
-                    ctx.fillRect(c * 32, r * 32, 32, 32);
-                  }
-                }
-                ctx.strokeStyle = "#ffffff";
-                ctx.lineWidth = 3;
-                ctx.strokeRect(1.5, 1.5, 253, 93);
-                return canvas;
-              })()}
-            />
-          </meshStandardMaterial>
+          />
         </mesh>
 
         <mesh position={[-10, 5, 0]}>
