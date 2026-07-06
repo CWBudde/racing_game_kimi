@@ -133,6 +133,8 @@ export function GameUI() {
     isCountingDown,
     lap,
     totalLaps,
+    playerPosition,
+    racerCount,
     currentLapTime,
     totalRaceTime,
     bestLapTime,
@@ -159,6 +161,8 @@ export function GameUI() {
       isCountingDown: state.isCountingDown,
       lap: state.lap,
       totalLaps: state.totalLaps,
+      playerPosition: state.playerPosition,
+      racerCount: state.racerCount,
       currentLapTime: state.currentLapTime,
       totalRaceTime: state.totalRaceTime,
       bestLapTime: state.bestLapTime,
@@ -455,14 +459,28 @@ export function GameUI() {
   return (
     <>
       <div className="absolute top-0 left-0 right-0 p-4 flex justify-between items-start z-40 pointer-events-none">
-        <div className="bg-black/60 backdrop-blur-sm rounded-xl p-3 border-2 border-yellow-400">
-          <div className="text-yellow-400 text-sm font-bold uppercase tracking-wider">
-            Lap
+        <div className="flex items-start gap-3">
+          <div className="bg-black/60 backdrop-blur-sm rounded-xl p-3 border-2 border-yellow-400">
+            <div className="text-yellow-400 text-sm font-bold uppercase tracking-wider">
+              Lap
+            </div>
+            <div className="text-white text-3xl font-mono font-bold">
+              {lap}
+              <span className="text-gray-400 text-lg">/{totalLaps}</span>
+            </div>
           </div>
-          <div className="text-white text-3xl font-mono font-bold">
-            {lap}
-            <span className="text-gray-400 text-lg">/{totalLaps}</span>
-          </div>
+
+          {racerCount > 0 && (
+            <div className="bg-black/60 backdrop-blur-sm rounded-xl p-3 border-2 border-green-400">
+              <div className="text-green-400 text-sm font-bold uppercase tracking-wider">
+                Pos
+              </div>
+              <div className="text-white text-3xl font-mono font-bold">
+                {playerPosition || "-"}
+                <span className="text-gray-400 text-lg">/{racerCount}</span>
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="bg-black/60 backdrop-blur-sm rounded-xl p-3 border-2 border-blue-400">
