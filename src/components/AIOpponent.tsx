@@ -196,11 +196,13 @@ export function AIOpponent({
 
     // Off-track slowdown (G1) — same rule as the player, so an AI shoved onto
     // the grass by contact pays the same penalty: thrust gated to half speed
-    // plus a velocity scrub (applied after the force step below).
+    // plus a velocity scrub (applied after the force step below). Squared
+    // compare — only the threshold matters, no need for the sqrt.
     const centerPt = track.points[idx];
-    const offTrack =
-      Math.hypot(centerPt.x - pos.x, centerPt.z - pos.z) >
-      track.width * 0.5 + OFF_TRACK_MARGIN;
+    const offDx = centerPt.x - pos.x;
+    const offDz = centerPt.z - pos.z;
+    const offRoadAt = track.width * 0.5 + OFF_TRACK_MARGIN;
+    const offTrack = offDx * offDx + offDz * offDz > offRoadAt * offRoadAt;
 
     // Difficulty pace + rubber-band toward the player. A finished car targets 0
     // so it brakes to a stop after crossing the line.

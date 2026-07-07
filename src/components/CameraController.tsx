@@ -16,6 +16,7 @@ export function CameraController() {
   // re-render). The car pose and speed are read straight from the transient
   // module inside the frame loop.
   const isPlaying = useGameStore((state) => state.isPlaying);
+  const isPaused = useGameStore((state) => state.isPaused);
   const isCountingDown = useGameStore((state) => state.isCountingDown);
   const selectedTrackId = useGameStore((state) => state.selectedTrackId);
 
@@ -88,7 +89,9 @@ export function CameraController() {
 
     // Off-track rumble (G1): small random jitter, growing with speed, so the
     // grass/sand reads as rough even before the drag visibly slows the car.
-    if (carTransform.offTrack) {
+    // Skipped while paused — the physics loop freezes carTransform then, and a
+    // stale offTrack=true must not shake the camera behind the pause menu.
+    if (carTransform.offTrack && !isPaused) {
       const shake = 0.05 + 0.2 * Math.min(carTransform.speedKmh / TOP_SPEED_KMH, 1);
       camera.position.x += (Math.random() - 0.5) * shake;
       camera.position.y += (Math.random() - 0.5) * shake * 0.6;
