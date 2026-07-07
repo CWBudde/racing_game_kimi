@@ -283,19 +283,19 @@ Progress markers: ✅ done · 🚧 in progress · ⬜ not started.
 #### 1.6 · B10 — Frame-rate-independent smoothing ✅
 - [x] Use exponential-decay (`1 - pow(k, dt)`) for camera, chassis tilt, and countdown camera
 
-### Phase 2 — Make it a race 🟡 — ⬜ not started
+### Phase 2 — Make it a race 🟡 — 🚧 in progress
 
-#### 2.1 · G2 — AI that actually races
-- [ ] Give each AI a progress + lap counter (reuse the B2 checkpoint model)
-- [ ] Compute live race positions every frame; expose to HUD as "P1/3"
-- [ ] Scale AI target speed to track length + a difficulty setting (drop hardcoded seconds-per-lap)
-- [ ] Add light rubber-banding (catch-up / fall-back relative to the player)
-- [ ] End the race with a results table: player vs AI finish times
+#### 2.1 · G2 — AI that actually races ✅
+- [x] Give each AI a progress + lap counter (reuse the B2 checkpoint model)
+- [x] Compute live race positions every frame; expose to HUD as "P1/3"
+- [x] Scale AI target speed to track length + a difficulty setting (drop hardcoded seconds-per-lap)
+- [x] Add light rubber-banding (catch-up / fall-back relative to the player)
+- [x] End the race with a results table: player vs AI finish times
 
-#### 2.2 · G1 — Off-track slowdown
-- [ ] Reuse the center-line distance already computed for lap progress
-- [ ] Apply a drag multiplier when the car is off the road surface
-- [ ] Add camera rumble / feedback while off-track
+#### 2.2 · G1 — Off-track slowdown ✅
+- [x] Reuse the center-line distance already computed for lap progress
+- [x] Apply a drag multiplier when the car is off the road surface
+- [x] Add camera rumble / feedback while off-track
 
 #### 2.3 · G5 / U1 — Race-craft HUD
 - [ ] Minimap: draw the center line to a small canvas with a dot per car

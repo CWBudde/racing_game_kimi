@@ -230,15 +230,16 @@ export function getTrackStart(trackId = DEFAULT_TRACK_ID): {
   return getTrackLayout(trackId).start;
 }
 
-// Fraction in [0, 1) around the centerline of the sample nearest (x, z) — it is
-// best / points.length, so it never quite reaches 1. Shared by the player and AI
-// so race standings order everyone on one progress metric. Callers combine this
-// with a lap count for a monotonic race position.
-export function progressFraction(
+// Nearest centerline sample to (x, z): its index, the progress fraction in
+// [0, 1) (index / points.length, so it never quite reaches 1), and the XZ
+// distance to that sample. One search serves both race-standings progress and
+// off-track detection — the samples are dense enough (~1–2 m apart) that the
+// nearest-sample distance is a good stand-in for distance from the centerline.
+export function centerlineSample(
   points: THREE.Vector3[],
   x: number,
   z: number,
-): number {
+): { index: number; fraction: number; distance: number } {
   let best = 0;
   let bestDist = Infinity;
   for (let i = 0; i < points.length; i++) {
@@ -250,7 +251,22 @@ export function progressFraction(
       best = i;
     }
   }
-  return best / points.length;
+  return {
+    index: best,
+    fraction: best / points.length,
+    distance: Math.sqrt(bestDist),
+  };
+}
+
+// Fraction in [0, 1) around the centerline of the sample nearest (x, z). Shared
+// by the player and AI so race standings order everyone on one progress metric.
+// Callers combine this with a lap count for a monotonic race position.
+export function progressFraction(
+  points: THREE.Vector3[],
+  x: number,
+  z: number,
+): number {
+  return centerlineSample(points, x, z).fraction;
 }
 
 export function generateBarrierSegments(

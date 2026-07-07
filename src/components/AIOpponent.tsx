@@ -5,7 +5,13 @@ import type { RapierRigidBody } from "@react-three/rapier";
 import * as THREE from "three";
 import { getTrackLayout } from "./trackData";
 import { useGameStore } from "../store/gameStore";
-import { CAR_MASS, MAX_SPEED } from "./carConstants";
+import {
+  CAR_MASS,
+  MAX_SPEED,
+  OFF_TRACK_DRAG,
+  OFF_TRACK_MARGIN,
+  OFF_TRACK_MAX_SPEED_MUL,
+} from "./carConstants";
 import { applyKartForces, yawFromQuat } from "./kartForces";
 import { DIFFICULTY, computeAiInput, rubberBand } from "./aiController";
 import {
@@ -179,15 +185,23 @@ export function AIOpponent({
       return;
     }
 
+    // Off-track slowdown (G1) — same rule as the player, so an AI shoved onto
+    // the grass by contact pays the same penalty: thrust gated to half speed
+    // plus a velocity scrub (applied after the force step below).
+    const centerPt = track.points[idx];
+    const offTrack =
+      Math.hypot(centerPt.x - pos.x, centerPt.z - pos.z) >
+      track.width * 0.5 + OFF_TRACK_MARGIN;
+
     // Difficulty pace + rubber-band toward the player. A finished car targets 0
     // so it brakes to a stop after crossing the line.
     const diff = DIFFICULTY[difficulty];
     const player = getRacer("player");
     const gap = player ? player.progress - aiProgress : 0;
     const baseMax = MAX_SPEED * diff.paceMul;
-    const max = finishedRef.current
-      ? 0
-      : rubberBand(baseMax, gap, diff.rubberMax);
+    const max =
+      (finishedRef.current ? 0 : rubberBand(baseMax, gap, diff.rubberMax)) *
+      (offTrack ? OFF_TRACK_MAX_SPEED_MUL : 1);
 
     const { input } = computeAiInput({
       points: track.points,
@@ -207,6 +221,12 @@ export function AIOpponent({
       { maxSpeed: max, accelMul: 1, gripBase: 0.9 },
       dt,
     );
+
+    if (offTrack) {
+      const v = rb.linvel();
+      const drag = Math.exp(-OFF_TRACK_DRAG * dt);
+      rb.setLinvel({ x: v.x * drag, y: v.y, z: v.z * drag }, true);
+    }
 
     // Lap counting — identical gate model to the player (gates.ts).
     const gate = gates[nextGateRef.current];

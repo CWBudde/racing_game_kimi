@@ -86,6 +86,15 @@ export function CameraController() {
     // Smoothly interpolate camera position (frame-rate independent)
     camera.position.lerp(targetPosition.current, smoothAlpha(CAMERA_LAG, delta));
 
+    // Off-track rumble (G1): small random jitter, growing with speed, so the
+    // grass/sand reads as rough even before the drag visibly slows the car.
+    if (carTransform.offTrack) {
+      const shake = 0.05 + 0.2 * Math.min(carTransform.speedKmh / TOP_SPEED_KMH, 1);
+      camera.position.x += (Math.random() - 0.5) * shake;
+      camera.position.y += (Math.random() - 0.5) * shake * 0.6;
+      camera.position.z += (Math.random() - 0.5) * shake;
+    }
+
     // Smoothly interpolate look-at target
     currentLookAt.current.lerp(
       targetLookAt.current,

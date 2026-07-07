@@ -17,6 +17,22 @@ export const STEERING_SPEED = 5.0; // yaw rate scale
 export const MAX_STEERING_ANGLE = 0.8; // max steer input magnitude
 export const CAR_MASS = 80; // rigid-body mass (player + AI)
 
+// --- Off-track penalty (PLAN.md · G1) ----------------------------------------
+// A car counts as off-track once it is farther from the centerline than the
+// road half-width plus this margin (the kerb/edge strips extend ~0.9 m past the
+// asphalt, so the margin keeps riding the kerbs penalty-free).
+export const OFF_TRACK_MARGIN = 1.5; // meters beyond the road half-width
+// Off-track the drivetrain is gated to this fraction of the normal top speed —
+// the accel branch in kartForces.ts stops thrusting above it, and the model's
+// own friction/damping pulls the car down to it. This gate (not the drag) is
+// the primary penalty: velocity-scale drag alone is a rounding error against
+// the impulse/friction balance the arcade model runs on.
+export const OFF_TRACK_MAX_SPEED_MUL = 0.5;
+// Per-second exponential velocity drag while off-track — scrubs speed when the
+// car *enters* the grass above the gated cap (where the thrust gate alone would
+// let it coast).
+export const OFF_TRACK_DRAG = 0.8;
+
 // Boosted top speed converted to km/h. Used as the speedometer's full-scale so
 // the gauge has headroom above the ~162 km/h unboosted top and the needle
 // actually moves when boosting. Speed-star (a further 1.5x) can pin it past 100%.

@@ -4,13 +4,16 @@ import { type RapierRigidBody } from "@react-three/rapier";
 import * as THREE from "three";
 import { useGameStore } from "../store/gameStore";
 import { carTransform, seedCarTransform } from "../store/carTransform";
-import { getTrackLayout, getTrackStart, progressFraction } from "./trackData";
+import { centerlineSample, getTrackLayout, getTrackStart } from "./trackData";
 import { seedProgress, updateProgress } from "../store/raceStandings";
 import {
   ACCELERATION,
   BOOST_MULTIPLIER,
   CAR_MASS,
   MAX_SPEED,
+  OFF_TRACK_DRAG,
+  OFF_TRACK_MARGIN,
+  OFF_TRACK_MAX_SPEED_MUL,
 } from "./carConstants";
 import { smoothAlpha } from "./smoothing";
 import { applyKartForces } from "./kartForces";
@@ -307,8 +310,22 @@ export function useCarPhysics() {
       store.updateBoost(boostAmount - dt * 20);
     }
     const boostMul = boostOn ? BOOST_MULTIPLIER : 1;
+
+    // Off-track slowdown (G1): the same nearest-sample search that feeds race
+    // progress also yields the distance from the centerline. Past the road
+    // edge (+ kerb margin), thrust is gated to half the normal top speed and a
+    // drag scrubs any excess, so cutting the grass never pays. The position
+    // only changes during the physics step, so sampling here (pre-forces) and
+    // reusing the result for progress below reads one consistent pose.
+    const carPos = car.translation();
+    const sample = centerlineSample(trackLayout.points, carPos.x, carPos.z);
+    const offTrack =
+      sample.distance > trackLayout.width * 0.5 + OFF_TRACK_MARGIN;
+
     const effectiveMaxSpeed =
-      (hasSpeedStar ? MAX_SPEED * 1.5 : MAX_SPEED) * boostMul;
+      (hasSpeedStar ? MAX_SPEED * 1.5 : MAX_SPEED) *
+      boostMul *
+      (offTrack ? OFF_TRACK_MAX_SPEED_MUL : 1);
 
     // Turbo stays a player-only extra impulse, applied by the core at the same
     // point in the force sequence as before the refactor.
@@ -369,20 +386,23 @@ export function useCarPhysics() {
     const finalYaw = getYawFromQuaternion(car.rotation());
     const speedKmh = Math.abs(forwardSpeed) * 3.6;
 
+    if (offTrack) {
+      const vel = car.linvel();
+      const drag = Math.exp(-OFF_TRACK_DRAG * dt);
+      car.setLinvel({ x: vel.x * drag, y: vel.y, z: vel.z * drag }, true);
+    }
+
     // Transient pose for the camera — written every frame, no re-render.
     carTransform.x = pos.x;
     carTransform.y = pos.y;
     carTransform.z = pos.z;
     carTransform.yaw = finalYaw;
     carTransform.speedKmh = speedKmh;
+    carTransform.offTrack = offTrack;
 
     // Feed the player's continuous progress into the race standings (lap count
     // is authoritative from the store; the fraction orders cars within a lap).
-    updateProgress(
-      "player",
-      store.lap,
-      progressFraction(trackLayout.points, pos.x, pos.z),
-    );
+    updateProgress("player", store.lap, sample.fraction);
 
     // Toggle exhaust visibility directly instead of via React state, which used
     // to re-render the whole car mesh tree every frame.
