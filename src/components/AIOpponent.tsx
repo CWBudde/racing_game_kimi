@@ -3,7 +3,7 @@ import { useFrame } from "@react-three/fiber";
 import { CuboidCollider, RigidBody } from "@react-three/rapier";
 import type { RapierRigidBody } from "@react-three/rapier";
 import * as THREE from "three";
-import { getTrackLayout } from "./trackData";
+import { centerlineSample, getTrackLayout } from "./trackData";
 import { useGameStore } from "../store/gameStore";
 import {
   CAR_MASS,
@@ -19,7 +19,6 @@ import {
   centerlineYaw,
   gateAlong,
   gateLateral,
-  nearestPointIndex,
 } from "./gates";
 import {
   getRacer,
@@ -54,6 +53,9 @@ export function AIOpponent({
   const finishedRef = useRef(false);
   const stuckTimerRef = useRef(0);
   const lastProgressRef = useRef(0);
+  // Sticky centerline index (see centerlineSample): keeps the AI matched to
+  // its own leg of a self-crossing layout, both for steering aim and progress.
+  const sampleIdxRef = useRef<number | null>(null);
   const wheelGroupRef = useRef<THREE.Group>(null);
   const wheelRotRef = useRef(0);
 
@@ -130,11 +132,12 @@ export function AIOpponent({
     gateAlongRef.current = null;
     finishedRef.current = false;
     stuckTimerRef.current = 0;
+    sampleIdxRef.current = Math.round(spawn.t0 * track.points.length) % track.points.length;
     // Seed below any real progress so the first frame reads as "advanced" and
     // can't false-trigger stuck recovery against the signed progress metric.
     lastProgressRef.current = -Infinity;
     updateProgress(id, 1, spawn.t0);
-  }, [isPlaying, isCountingDown, spawn, id]);
+  }, [isPlaying, isCountingDown, spawn, id, track.points.length]);
 
   useFrame((_, delta) => {
     const rb = rbRef.current;
@@ -148,7 +151,13 @@ export function AIOpponent({
     const forward = { x: Math.sin(yaw), z: Math.cos(yaw) };
     const forwardSpeed = vel.x * forward.x + vel.z * forward.z;
 
-    const idx = nearestPointIndex(track.points, pos.x, pos.z);
+    const idx = centerlineSample(
+      track.points,
+      pos.x,
+      pos.z,
+      sampleIdxRef.current,
+    ).index;
+    sampleIdxRef.current = idx;
     const t = idx / track.points.length;
     const self = getRacer(id);
     const aiProgress = self ? self.progress : lapRef.current - 1 + t;

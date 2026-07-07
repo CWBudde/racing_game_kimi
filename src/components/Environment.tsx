@@ -521,6 +521,7 @@ export function Environment({ trackId }: EnvironmentProps) {
   const { left, right } = layout.sides;
   const isNeon = layout.definition.theme === "neon";
   const isDesert = layout.definition.theme === "desert";
+  const isForest = layout.definition.theme === "forest";
   const itemPool = ITEM_POOLS[trackId] ?? ITEM_POOLS["coastal-gp"];
   const trackClearance = layout.width * 0.5 + 16;
 
@@ -632,6 +633,35 @@ export function Environment({ trackId }: EnvironmentProps) {
     const positions: { position: [number, number, number]; scale: number }[] = [];
     if (isNeon || isDesert) return positions;
 
+    if (isForest) {
+      // Thick forest: a dense scatter across the whole play field instead of
+      // the classic thin rings. Trees hug the road closer (smaller clearance)
+      // for a tunnel-through-the-woods feel, and their trunk colliders are the
+      // only "barriers" these tracks have. Rejection sampling against the
+      // centerline keeps every leg of the layout (including a crossroad) clear.
+      const forestClearance = layout.width * 0.5 + 7;
+      for (let i = 0; i < 620 && positions.length < 300; i++) {
+        const angle = seededRandom(i * 3 + 17) * Math.PI * 2;
+        const radius = 26 + Math.sqrt(seededRandom(i * 7 + 43)) * 215;
+        const x = Math.cos(angle) * radius;
+        const z = Math.sin(angle) * radius;
+        if (tooCloseToTrack(trackPoints, x, z, forestClearance)) continue;
+        positions.push({
+          position: [x, 0, z],
+          scale: 0.8 + seededRandom(i + 71) * 0.85,
+        });
+      }
+      for (let i = 0; i < 56; i++) {
+        const angle = (i / 56) * Math.PI * 2 + seededRandom(i + 109) * 0.5;
+        const radius = 250 + seededRandom(i + 149) * 170;
+        positions.push({
+          position: [Math.cos(angle) * radius, 0, Math.sin(angle) * radius],
+          scale: 1.1 + seededRandom(i + 181) * 0.9,
+        });
+      }
+      return positions;
+    }
+
     for (let i = 0; i < 60; i++) {
       const angle = (i / 60) * Math.PI * 2 + seededRandom(i + 11) * 0.4;
       const radius = 80 + seededRandom(i + 37) * 60;
@@ -654,7 +684,7 @@ export function Environment({ trackId }: EnvironmentProps) {
     }
 
     return positions;
-  }, [isDesert, isNeon, trackClearance, trackPoints]);
+  }, [isDesert, isForest, isNeon, layout.width, trackClearance, trackPoints]);
 
   const rocks = useMemo(() => {
     const positions: { position: [number, number, number]; scale: number }[] = [];
@@ -847,13 +877,13 @@ export function Environment({ trackId }: EnvironmentProps) {
             <sphereGeometry args={[20, 32, 32]} />
             <meshBasicMaterial color={isDesert ? "#ffd27a" : "#ffdd44"} />
           </mesh>
-          <FollowSun intensity={1.2} offset={[120, 120, -120]} />
-          <ambientLight intensity={0.4} />
+          <FollowSun intensity={isForest ? 1.05 : 1.2} offset={[120, 120, -120]} />
+          <ambientLight intensity={isForest ? 0.45 : 0.4} />
           <hemisphereLight
             args={[
-              isDesert ? "#f4c98c" : "#87CEEB",
-              isDesert ? "#9b6741" : "#4a7c59",
-              0.5,
+              isDesert ? "#f4c98c" : isForest ? "#cfe8cf" : "#87CEEB",
+              isDesert ? "#9b6741" : isForest ? "#245c31" : "#4a7c59",
+              isForest ? 0.6 : 0.5,
             ]}
           />
         </>

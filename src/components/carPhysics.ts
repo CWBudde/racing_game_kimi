@@ -190,6 +190,9 @@ export function useCarPhysics() {
 
   const nextGateRef = useRef(1);
   const gateAlongRef = useRef<number | null>(null);
+  // Last matched centerline sample index, for sticky matching (see
+  // centerlineSample) — null forces a fresh global search.
+  const sampleIdxRef = useRef<number | null>(null);
   const useItemPressedRef = useRef(false);
   const respawnPressedRef = useRef(false);
   // Accumulates frame time so the HUD speedometer store write happens at ~10 Hz
@@ -218,6 +221,7 @@ export function useCarPhysics() {
     if (isPlaying) {
       nextGateRef.current = 1;
       gateAlongRef.current = null;
+      sampleIdxRef.current = null;
       hudAccumRef.current = 0;
     }
   }, [isPlaying, selectedTrackId]);
@@ -270,6 +274,7 @@ export function useCarPhysics() {
       // Teleport-safe progress: reseed the fraction (no wrap inference) so the
       // next updateProgress doesn't misread the jump across the line as a lap.
       seedProgress("player", idx / pts.length);
+      sampleIdxRef.current = idx;
       respawnPressedRef.current = wantsRespawn;
       return;
     }
@@ -317,10 +322,31 @@ export function useCarPhysics() {
     // drag scrubs any excess, so cutting the grass never pays. The position
     // only changes during the physics step, so sampling here (pre-forces) and
     // reusing the result for progress below reads one consistent pose.
+    //
+    // Matching is sticky (windowed around last frame's index) so a crossroad
+    // track can't flip the car onto the other leg mid-junction. Only when the
+    // windowed match says "off road" AND a global search finds a meaningfully
+    // closer section (the player drove across the grass to another part of the
+    // track) do we re-match — and then the progress is re-seeded, not updated,
+    // so the discontinuity can't be misread as a lap wrap.
     const carPos = car.translation();
-    const sample = centerlineSample(trackLayout.points, carPos.x, carPos.z);
-    const offTrack =
-      sample.distance > trackLayout.width * 0.5 + OFF_TRACK_MARGIN;
+    const offRoadAt = trackLayout.width * 0.5 + OFF_TRACK_MARGIN;
+    let sample = centerlineSample(
+      trackLayout.points,
+      carPos.x,
+      carPos.z,
+      sampleIdxRef.current,
+    );
+    let rematched = false;
+    if (sample.distance > offRoadAt && sampleIdxRef.current !== null) {
+      const global = centerlineSample(trackLayout.points, carPos.x, carPos.z);
+      if (global.distance + 1 < sample.distance) {
+        sample = global;
+        rematched = true;
+      }
+    }
+    sampleIdxRef.current = sample.index;
+    const offTrack = sample.distance > offRoadAt;
 
     const effectiveMaxSpeed =
       (hasSpeedStar ? MAX_SPEED * 1.5 : MAX_SPEED) *
@@ -402,7 +428,11 @@ export function useCarPhysics() {
 
     // Feed the player's continuous progress into the race standings (lap count
     // is authoritative from the store; the fraction orders cars within a lap).
-    updateProgress("player", store.lap, sample.fraction);
+    if (rematched) {
+      seedProgress("player", sample.fraction);
+    } else {
+      updateProgress("player", store.lap, sample.fraction);
+    }
 
     // Toggle exhaust visibility directly instead of via React state, which used
     // to re-render the whole car mesh tree every frame.

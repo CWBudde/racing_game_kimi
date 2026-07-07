@@ -108,6 +108,8 @@ export const ITEM_POOLS: Record<string, ItemType[]> = {
   "coastal-gp": ["boost-refill", "speed-star", "time-bonus"],
   "desert-run": ["turbo", "grip-boost", "time-bonus"],
   "neon-district": ["turbo", "speed-star", "boost-refill", "time-bonus"],
+  "evergreen-trail": ["grip-boost", "boost-refill", "time-bonus"],
+  "woodland-cross": ["turbo", "grip-boost", "speed-star", "time-bonus"],
 };
 
 export const ITEM_INFO: Record<

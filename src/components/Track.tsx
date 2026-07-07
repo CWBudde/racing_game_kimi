@@ -31,6 +31,16 @@ export function Track({ trackId }: TrackProps) {
     const indices: number[] = [];
     const n = trackPoints.length;
 
+    // Quad winding depends on which way the control loop runs (CW vs CCW). A
+    // loop authored the "other" way would put every face upside down — the
+    // road back-face-culls to invisible while still casting a road-shaped
+    // shadow. Test the first face's normal and flip the index order if it
+    // points down, so both orientations render top-side up.
+    const firstNormalY = new THREE.Vector3()
+      .subVectors(right[0], left[0])
+      .cross(new THREE.Vector3().subVectors(left[1], left[0])).y;
+    const flip = firstNormalY < 0;
+
     let cumulativeV = 0;
     for (let i = 0; i < n; i++) {
       const ni = (i + 1) % n;
@@ -51,8 +61,13 @@ export function Track({ trackId }: TrackProps) {
       uvs.push(0, v1);
       uvs.push(1, v1);
 
-      indices.push(baseIndex, baseIndex + 1, baseIndex + 2);
-      indices.push(baseIndex + 1, baseIndex + 3, baseIndex + 2);
+      if (flip) {
+        indices.push(baseIndex, baseIndex + 2, baseIndex + 1);
+        indices.push(baseIndex + 1, baseIndex + 2, baseIndex + 3);
+      } else {
+        indices.push(baseIndex, baseIndex + 1, baseIndex + 2);
+        indices.push(baseIndex + 1, baseIndex + 3, baseIndex + 2);
+      }
 
       cumulativeV += segLen;
     }
@@ -136,8 +151,16 @@ export function Track({ trackId }: TrackProps) {
     return cp;
   }, [trackPoints]);
 
-  const leftBarrierSegments = useMemo(() => generateBarrierSegments(left, 6), [left]);
-  const rightBarrierSegments = useMemo(() => generateBarrierSegments(right, 6), [right]);
+  // Barrier-free layouts (forest trails) render and collide with no rails at
+  // all — the off-track slowdown is what keeps racing on the road.
+  const leftBarrierSegments = useMemo(
+    () => (layout.barriers ? generateBarrierSegments(left, 6) : []),
+    [left, layout.barriers],
+  );
+  const rightBarrierSegments = useMemo(
+    () => (layout.barriers ? generateBarrierSegments(right, 6) : []),
+    [right, layout.barriers],
+  );
 
   const startAngle = Math.atan2(
     trackPoints[1].x - trackPoints[0].x,
@@ -163,7 +186,15 @@ export function Track({ trackId }: TrackProps) {
         >
           <meshStandardMaterial
             map={groundTexture}
-            color={isNeon ? "#07101c" : isDesert ? "#a06a3e" : "#4a7c59"}
+            color={
+              isNeon
+                ? "#07101c"
+                : isDesert
+                  ? "#a06a3e"
+                  : theme === "forest"
+                    ? "#7fbc68"
+                    : "#4a7c59"
+            }
             roughness={0.95}
             metalness={isNeon ? 0.15 : 0.02}
             emissive={isNeon ? "#061222" : "#000000"}
@@ -198,7 +229,10 @@ export function Track({ trackId }: TrackProps) {
 
         return (
           <group key={`edge-strip-${i}`}>
-            <mesh position={[left[i].x, 0.1, left[i].z]} rotation={[0, angle, 0]}>
+            <mesh
+              position={[left[i].x, left[i].y + 0.1, left[i].z]}
+              rotation={[0, angle, 0]}
+            >
               <boxGeometry args={[1.8, 0.14, 3.2]} />
               <meshStandardMaterial
                 color={isPrimary ? primaryColor : secondaryColor}
@@ -207,7 +241,10 @@ export function Track({ trackId }: TrackProps) {
                 metalness={isNeon ? 0.3 : 0.05}
               />
             </mesh>
-            <mesh position={[right[i].x, 0.1, right[i].z]} rotation={[0, angle, 0]}>
+            <mesh
+              position={[right[i].x, right[i].y + 0.1, right[i].z]}
+              rotation={[0, angle, 0]}
+            >
               <boxGeometry args={[1.8, 0.14, 3.2]} />
               <meshStandardMaterial
                 color={isPrimary ? secondaryColor : primaryColor}
@@ -365,28 +402,31 @@ export function Track({ trackId }: TrackProps) {
         <mesh position={[-10, 5, 0]}>
           <boxGeometry args={[1.2, 10, 1.2]} />
           <meshStandardMaterial
-            color="#0b1122"
-            emissive="#00d9ff"
-            emissiveIntensity={0.7}
-            metalness={0.7}
+            color={theme === "forest" ? "#7a5b36" : "#0b1122"}
+            emissive={theme === "forest" ? "#000000" : "#00d9ff"}
+            emissiveIntensity={theme === "forest" ? 0 : 0.7}
+            metalness={theme === "forest" ? 0 : 0.7}
+            roughness={theme === "forest" ? 0.9 : undefined}
           />
         </mesh>
         <mesh position={[10, 5, 0]}>
           <boxGeometry args={[1.2, 10, 1.2]} />
           <meshStandardMaterial
-            color="#0b1122"
-            emissive="#ff3ccf"
-            emissiveIntensity={0.7}
-            metalness={0.7}
+            color={theme === "forest" ? "#7a5b36" : "#0b1122"}
+            emissive={theme === "forest" ? "#000000" : "#ff3ccf"}
+            emissiveIntensity={theme === "forest" ? 0 : 0.7}
+            metalness={theme === "forest" ? 0 : 0.7}
+            roughness={theme === "forest" ? 0.9 : undefined}
           />
         </mesh>
         <mesh position={[0, 9.6, 0]}>
           <boxGeometry args={[22, 0.7, 1.1]} />
           <meshStandardMaterial
-            color="#101935"
-            emissive="#7d8cff"
-            emissiveIntensity={0.8}
-            metalness={0.6}
+            color={theme === "forest" ? "#8a6a40" : "#101935"}
+            emissive={theme === "forest" ? "#000000" : "#7d8cff"}
+            emissiveIntensity={theme === "forest" ? 0 : 0.8}
+            metalness={theme === "forest" ? 0 : 0.6}
+            roughness={theme === "forest" ? 0.9 : undefined}
           />
         </mesh>
       </group>

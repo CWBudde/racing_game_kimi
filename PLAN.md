@@ -297,6 +297,17 @@ Progress markers: ✅ done · 🚧 in progress · ⬜ not started.
 - [x] Apply a drag multiplier when the car is off the road surface
 - [x] Add camera rumble / feedback while off-track
 
+#### 2.6 · Content — barrier-free forest courses ✅ (user request)
+- [x] `forest` theme: dirt-trail road + lush meadow textures, misty green sky/fog, dense
+      instanced tree field (trunk colliders are the only "barriers")
+- [x] Per-track `barriers: false` flag — off-track slowdown keeps racing honest instead of rails
+- [x] **Evergreen Trail**: flowing loop through thick forest
+- [x] **Woodland Cross**: figure-eight with a live crossroad (second pass raised 12 cm to
+      avoid z-fighting; lobes sized so no checkpoint gate sits near the junction)
+- [x] Sticky (windowed) centerline matching for player + AI so cars at the junction stay
+      matched to their own leg (progress, steering, off-track detection)
+- [x] Orientation-independent road winding (a CW control loop used to render face-down)
+
 #### 2.3 · G5 / U1 — Race-craft HUD
 - [ ] Minimap: draw the center line to a small canvas with a dot per car
 - [ ] Wrong-way detection + warning

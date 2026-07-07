@@ -24,6 +24,14 @@ function GameScene() {
   const playerStart = getTrackStart(selectedTrackId);
   const isNeon = trackLayout.definition.theme === "neon";
   const isDesert = trackLayout.definition.theme === "desert";
+  const isForest = trackLayout.definition.theme === "forest";
+  const skyColor = isNeon
+    ? "#040712"
+    : isDesert
+      ? "#d9a66c"
+      : isForest
+        ? "#a6cfa1"
+        : "#87CEEB";
 
   // Drive the race/lap timer from the render clock — the same one the physics
   // uses — instead of a setInterval, which is throttled in background tabs and
@@ -40,16 +48,13 @@ function GameScene() {
 
   return (
     <>
-      <color
-        attach="background"
-        args={[isNeon ? "#040712" : isDesert ? "#d9a66c" : "#87CEEB"]}
-      />
+      <color attach="background" args={[skyColor]} />
       <fog
         attach="fog"
         args={[
-          isNeon ? "#040712" : isDesert ? "#d9a66c" : "#87CEEB",
-          isNeon ? 90 : 100,
-          isNeon ? 700 : 800,
+          skyColor,
+          isNeon ? 90 : isForest ? 70 : 100,
+          isNeon ? 700 : isForest ? 520 : 800,
         ]}
       />
 
