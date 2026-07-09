@@ -3,9 +3,15 @@ import { useFrame } from "@react-three/fiber";
 import { CuboidCollider, RigidBody } from "@react-three/rapier";
 import type { RapierRigidBody } from "@react-three/rapier";
 import * as THREE from "three";
-import { getTrackLayout } from "./trackData";
+import { centerlineSample, getTrackLayout } from "./trackData";
 import { useGameStore } from "../store/gameStore";
-import { CAR_MASS, MAX_SPEED } from "./carConstants";
+import {
+  CAR_MASS,
+  MAX_SPEED,
+  OFF_TRACK_DRAG,
+  OFF_TRACK_MARGIN,
+  OFF_TRACK_MAX_SPEED_MUL,
+} from "./carConstants";
 import { applyKartForces, yawFromQuat } from "./kartForces";
 import { DIFFICULTY, computeAiInput, rubberBand } from "./aiController";
 import {
@@ -13,7 +19,6 @@ import {
   centerlineYaw,
   gateAlong,
   gateLateral,
-  nearestPointIndex,
 } from "./gates";
 import {
   getRacer,
@@ -48,6 +53,9 @@ export function AIOpponent({
   const finishedRef = useRef(false);
   const stuckTimerRef = useRef(0);
   const lastProgressRef = useRef(0);
+  // Sticky centerline index (see centerlineSample): keeps the AI matched to
+  // its own leg of a self-crossing layout, both for steering aim and progress.
+  const sampleIdxRef = useRef<number | null>(null);
   const wheelGroupRef = useRef<THREE.Group>(null);
   const wheelRotRef = useRef(0);
 
@@ -124,11 +132,12 @@ export function AIOpponent({
     gateAlongRef.current = null;
     finishedRef.current = false;
     stuckTimerRef.current = 0;
+    sampleIdxRef.current = Math.round(spawn.t0 * track.points.length) % track.points.length;
     // Seed below any real progress so the first frame reads as "advanced" and
     // can't false-trigger stuck recovery against the signed progress metric.
     lastProgressRef.current = -Infinity;
     updateProgress(id, 1, spawn.t0);
-  }, [isPlaying, isCountingDown, spawn, id]);
+  }, [isPlaying, isCountingDown, spawn, id, track.points.length]);
 
   useFrame((_, delta) => {
     const rb = rbRef.current;
@@ -142,7 +151,13 @@ export function AIOpponent({
     const forward = { x: Math.sin(yaw), z: Math.cos(yaw) };
     const forwardSpeed = vel.x * forward.x + vel.z * forward.z;
 
-    const idx = nearestPointIndex(track.points, pos.x, pos.z);
+    const idx = centerlineSample(
+      track.points,
+      pos.x,
+      pos.z,
+      sampleIdxRef.current,
+    ).index;
+    sampleIdxRef.current = idx;
     const t = idx / track.points.length;
     const self = getRacer(id);
     const aiProgress = self ? self.progress : lapRef.current - 1 + t;
@@ -179,15 +194,25 @@ export function AIOpponent({
       return;
     }
 
+    // Off-track slowdown (G1) — same rule as the player, so an AI shoved onto
+    // the grass by contact pays the same penalty: thrust gated to half speed
+    // plus a velocity scrub (applied after the force step below). Squared
+    // compare — only the threshold matters, no need for the sqrt.
+    const centerPt = track.points[idx];
+    const offDx = centerPt.x - pos.x;
+    const offDz = centerPt.z - pos.z;
+    const offRoadAt = track.width * 0.5 + OFF_TRACK_MARGIN;
+    const offTrack = offDx * offDx + offDz * offDz > offRoadAt * offRoadAt;
+
     // Difficulty pace + rubber-band toward the player. A finished car targets 0
     // so it brakes to a stop after crossing the line.
     const diff = DIFFICULTY[difficulty];
     const player = getRacer("player");
     const gap = player ? player.progress - aiProgress : 0;
     const baseMax = MAX_SPEED * diff.paceMul;
-    const max = finishedRef.current
-      ? 0
-      : rubberBand(baseMax, gap, diff.rubberMax);
+    const max =
+      (finishedRef.current ? 0 : rubberBand(baseMax, gap, diff.rubberMax)) *
+      (offTrack ? OFF_TRACK_MAX_SPEED_MUL : 1);
 
     const { input } = computeAiInput({
       points: track.points,
@@ -207,6 +232,12 @@ export function AIOpponent({
       { maxSpeed: max, accelMul: 1, gripBase: 0.9 },
       dt,
     );
+
+    if (offTrack) {
+      const v = rb.linvel();
+      const drag = Math.exp(-OFF_TRACK_DRAG * dt);
+      rb.setLinvel({ x: v.x * drag, y: v.y, z: v.z * drag }, true);
+    }
 
     // Lap counting — identical gate model to the player (gates.ts).
     const gate = gates[nextGateRef.current];

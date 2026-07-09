@@ -12,6 +12,8 @@ export const carTransform = {
   z: 0,
   yaw: 0,
   speedKmh: 0,
+  // True while the car is beyond the road edge (drives the camera rumble).
+  offTrack: false,
 };
 
 // Seed the transient from a known pose (used when a race/countdown begins) so
@@ -25,4 +27,5 @@ export const seedCarTransform = (
   carTransform.z = position[2];
   carTransform.yaw = yaw;
   carTransform.speedKmh = 0;
+  carTransform.offTrack = false;
 };

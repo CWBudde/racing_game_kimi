@@ -283,19 +283,30 @@ Progress markers: ✅ done · 🚧 in progress · ⬜ not started.
 #### 1.6 · B10 — Frame-rate-independent smoothing ✅
 - [x] Use exponential-decay (`1 - pow(k, dt)`) for camera, chassis tilt, and countdown camera
 
-### Phase 2 — Make it a race 🟡 — ⬜ not started
+### Phase 2 — Make it a race 🟡 — 🚧 in progress
 
-#### 2.1 · G2 — AI that actually races
-- [ ] Give each AI a progress + lap counter (reuse the B2 checkpoint model)
-- [ ] Compute live race positions every frame; expose to HUD as "P1/3"
-- [ ] Scale AI target speed to track length + a difficulty setting (drop hardcoded seconds-per-lap)
-- [ ] Add light rubber-banding (catch-up / fall-back relative to the player)
-- [ ] End the race with a results table: player vs AI finish times
+#### 2.1 · G2 — AI that actually races ✅
+- [x] Give each AI a progress + lap counter (reuse the B2 checkpoint model)
+- [x] Compute live race positions every frame; expose to HUD as "P1/3"
+- [x] Scale AI target speed to track length + a difficulty setting (drop hardcoded seconds-per-lap)
+- [x] Add light rubber-banding (catch-up / fall-back relative to the player)
+- [x] End the race with a results table: player vs AI finish times
 
-#### 2.2 · G1 — Off-track slowdown
-- [ ] Reuse the center-line distance already computed for lap progress
-- [ ] Apply a drag multiplier when the car is off the road surface
-- [ ] Add camera rumble / feedback while off-track
+#### 2.2 · G1 — Off-track slowdown ✅
+- [x] Reuse the center-line distance already computed for lap progress
+- [x] Apply a drag multiplier when the car is off the road surface
+- [x] Add camera rumble / feedback while off-track
+
+#### 2.6 · Content — barrier-free forest courses ✅ (user request)
+- [x] `forest` theme: dirt-trail road + lush meadow textures, misty green sky/fog, dense
+      instanced tree field (trunk colliders are the only "barriers")
+- [x] Per-track `barriers: false` flag — off-track slowdown keeps racing honest instead of rails
+- [x] **Evergreen Trail**: flowing loop through thick forest
+- [x] **Woodland Cross**: figure-eight with a live crossroad (second pass raised 12 cm to
+      avoid z-fighting; lobes sized so no checkpoint gate sits near the junction)
+- [x] Sticky (windowed) centerline matching for player + AI so cars at the junction stay
+      matched to their own leg (progress, steering, off-track detection)
+- [x] Orientation-independent road winding (a CW control loop used to render face-down)
 
 #### 2.3 · G5 / U1 — Race-craft HUD
 - [ ] Minimap: draw the center line to a small canvas with a dot per car

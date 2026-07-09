@@ -1,6 +1,6 @@
 import * as THREE from "three";
 
-export type TrackTheme = "classic" | "desert" | "neon";
+export type TrackTheme = "classic" | "desert" | "neon" | "forest";
 
 export interface TrackDefinition {
   id: string;
@@ -16,6 +16,10 @@ type TrackSource = TrackDefinition & {
   width: number;
   segments: number;
   controlPoints: Array<[number, number, number]>;
+  // false = no guard rails: the whole grass field is drivable (the off-track
+  // slowdown is the only thing keeping cars honest). Also what makes a
+  // self-crossing layout possible — rails would wall off the crossroad.
+  barriers?: boolean;
 };
 
 export interface BarrierSegment {
@@ -27,6 +31,7 @@ export interface BarrierSegment {
 export interface TrackLayout {
   definition: TrackDefinition;
   width: number;
+  barriers: boolean;
   curve: THREE.CatmullRomCurve3;
   points: THREE.Vector3[];
   sides: {
@@ -131,6 +136,69 @@ const TRACK_SOURCES: TrackSource[] = [
       [-120, 0, -70],
     ],
   },
+  {
+    id: "evergreen-trail",
+    name: "Evergreen Trail",
+    location: "Pinewood Valley",
+    difficulty: "Intermediate",
+    laps: 3,
+    description:
+      "A dirt trail winding through dense forest — no rails, and the moss slows anyone who strays.",
+    theme: "forest",
+    width: 18,
+    segments: 200,
+    barriers: false,
+    controlPoints: [
+      [-100, 0, -60],
+      [-115, 0, -10],
+      [-100, 0, 40],
+      [-65, 0, 70],
+      [-25, 0, 60],
+      [5, 0, 30],
+      [45, 0, 25],
+      [75, 0, 50],
+      [105, 0, 45],
+      [125, 0, 5],
+      [105, 0, -35],
+      [70, 0, -55],
+      [35, 0, -40],
+      [0, 0, -55],
+      [-35, 0, -75],
+      [-70, 0, -85],
+    ],
+  },
+  {
+    id: "woodland-cross",
+    name: "Woodland Cross",
+    location: "Twin Glades",
+    difficulty: "Advanced",
+    laps: 3,
+    description:
+      "A figure-eight through the woods with a live crossroad — watch for traffic at the junction!",
+    theme: "forest",
+    width: 18,
+    segments: 200,
+    barriers: false,
+    // The second pass through the junction (control points 10–11) is raised
+    // 12 cm so the two overlapping road surfaces don't z-fight; the Catmull-Rom
+    // blend spreads it into an imperceptible rise.
+    controlPoints: [
+      [128, 0, 2],
+      [112, 0, -44],
+      [62, 0, -58],
+      [16, 0, -18],
+      [-16, 0, 16],
+      [-42, 0, 36],
+      [-72, 0, 30],
+      [-86, 0, 0],
+      [-72, 0, -32],
+      [-42, 0, -38],
+      [-16, 0.12, -16],
+      [16, 0.12, 18],
+      [64, 0, 58],
+      [112, 0, 46],
+    ],
+  },
 ];
 
 export const TRACKS: TrackDefinition[] = TRACK_SOURCES.map((source) => ({
@@ -200,6 +268,7 @@ const buildTrackLayout = (source: TrackSource): TrackLayout => {
       theme: source.theme,
     },
     width: source.width,
+    barriers: source.barriers ?? true,
     curve,
     points,
     sides,
@@ -230,27 +299,67 @@ export function getTrackStart(trackId = DEFAULT_TRACK_ID): {
   return getTrackLayout(trackId).start;
 }
 
-// Fraction in [0, 1) around the centerline of the sample nearest (x, z) — it is
-// best / points.length, so it never quite reaches 1. Shared by the player and AI
-// so race standings order everyone on one progress metric. Callers combine this
-// with a lap count for a monotonic race position.
+// Nearest centerline sample to (x, z): its index, the progress fraction in
+// [0, 1) (index / points.length, so it never quite reaches 1), and the XZ
+// distance to that sample. One search serves both race-standings progress and
+// off-track detection — the samples are dense enough (~1–2 m apart) that the
+// nearest-sample distance is a good stand-in for distance from the centerline.
+//
+// When `prevIndex` is given, only samples within ±`halfWindow` indices of it
+// are considered ("sticky" matching). On a self-crossing layout (Woodland
+// Cross) a global search is ambiguous at the junction — both legs are equally
+// near — and a car would randomly flip to the other leg, corrupting its
+// progress and steering. The window keeps it matched to the leg it is actually
+// driving; callers fall back to a global search only on real discontinuities
+// (respawn/teleport).
+export function centerlineSample(
+  points: THREE.Vector3[],
+  x: number,
+  z: number,
+  prevIndex?: number | null,
+  halfWindow = 24,
+): { index: number; fraction: number; distance: number } {
+  const n = points.length;
+  let best = 0;
+  let bestDist = Infinity;
+  if (prevIndex !== undefined && prevIndex !== null) {
+    for (let k = -halfWindow; k <= halfWindow; k++) {
+      const i = (((prevIndex + k) % n) + n) % n;
+      const dx = points[i].x - x;
+      const dz = points[i].z - z;
+      const d = dx * dx + dz * dz;
+      if (d < bestDist) {
+        bestDist = d;
+        best = i;
+      }
+    }
+  } else {
+    for (let i = 0; i < n; i++) {
+      const dx = points[i].x - x;
+      const dz = points[i].z - z;
+      const d = dx * dx + dz * dz;
+      if (d < bestDist) {
+        bestDist = d;
+        best = i;
+      }
+    }
+  }
+  return {
+    index: best,
+    fraction: best / n,
+    distance: Math.sqrt(bestDist),
+  };
+}
+
+// Fraction in [0, 1) around the centerline of the sample nearest (x, z). Shared
+// by the player and AI so race standings order everyone on one progress metric.
+// Callers combine this with a lap count for a monotonic race position.
 export function progressFraction(
   points: THREE.Vector3[],
   x: number,
   z: number,
 ): number {
-  let best = 0;
-  let bestDist = Infinity;
-  for (let i = 0; i < points.length; i++) {
-    const dx = points[i].x - x;
-    const dz = points[i].z - z;
-    const d = dx * dx + dz * dz;
-    if (d < bestDist) {
-      bestDist = d;
-      best = i;
-    }
-  }
-  return best / points.length;
+  return centerlineSample(points, x, z).fraction;
 }
 
 export function generateBarrierSegments(
@@ -356,6 +465,38 @@ export const createRoadTexture = (theme: TrackTheme = "neon"): HTMLCanvasElement
     return canvas;
   }
 
+  if (theme === "forest") {
+    // Packed-dirt forest trail: warm brown base, tan speckle, darker wheel
+    // ruts, and pale sandy edge lines instead of painted asphalt markings.
+    // Authored bright: canvas textures render markedly darker in the scene
+    // (linear sampling + tone mapping), so mid-tone browns sink to mud.
+    ctx.fillStyle = "#d3ba8b";
+    ctx.fillRect(0, 0, 256, 256);
+
+    for (let i = 0; i < 2400; i++) {
+      const x = Math.random() * 256;
+      const y = Math.random() * 256;
+      const b = 170 + Math.random() * 60;
+      ctx.fillStyle = `rgba(${Math.min(b + 30, 255)}, ${b}, ${b - 50}, ${0.25 + Math.random() * 0.3})`;
+      ctx.fillRect(x, y, 2, 2);
+    }
+
+    ctx.fillStyle = "rgba(150, 122, 82, 0.3)";
+    ctx.fillRect(58, 0, 26, 256);
+    ctx.fillRect(172, 0, 26, 256);
+
+    ctx.fillStyle = "#f4ecd2";
+    ctx.fillRect(0, 0, 7, 256);
+    ctx.fillRect(249, 0, 7, 256);
+
+    ctx.fillStyle = "rgba(244, 236, 210, 0.5)";
+    for (let y = 0; y < 256; y += 56) {
+      ctx.fillRect(125, y, 6, 24);
+    }
+
+    return canvas;
+  }
+
   ctx.fillStyle = theme === "desert" ? "#5b4a38" : "#3a3a3a";
   ctx.fillRect(0, 0, 256, 256);
 
@@ -422,6 +563,40 @@ export const createGroundTexture = (
       glow.addColorStop(1, "rgba(255, 60, 207, 0)");
       ctx.fillStyle = glow;
       ctx.fillRect(x - r * 3, y - r * 3, r * 6, r * 6);
+    }
+
+    return canvas;
+  }
+
+  if (theme === "forest") {
+    // Lush meadow floor: saturated green base with grass-blade speckle in
+    // several greens and the odd wildflower dot. Kept bright — the mesh tints
+    // it with its own green, so a dark base would multiply down to black.
+    ctx.fillStyle = "#79b45e";
+    ctx.fillRect(0, 0, 512, 512);
+
+    for (let i = 0; i < 3200; i++) {
+      const x = Math.random() * 512;
+      const y = Math.random() * 512;
+      const alpha = 0.1 + Math.random() * 0.18;
+      const pick = Math.random();
+      ctx.fillStyle =
+        pick < 0.45
+          ? `rgba(150, 210, 120, ${alpha})`
+          : pick < 0.8
+            ? `rgba(96, 158, 76, ${alpha})`
+            : `rgba(44, 96, 44, ${alpha})`;
+      ctx.fillRect(x, y, 2, 3);
+    }
+
+    for (let i = 0; i < 60; i++) {
+      const x = Math.random() * 512;
+      const y = Math.random() * 512;
+      ctx.fillStyle =
+        Math.random() < 0.5
+          ? "rgba(240, 230, 140, 0.55)"
+          : "rgba(230, 240, 250, 0.45)";
+      ctx.fillRect(x, y, 2, 2);
     }
 
     return canvas;
