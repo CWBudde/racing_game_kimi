@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { TRACKS } from "./trackData";
 import { ITEM_INFO, useGameStore } from "../store/gameStore";
+import { Minimap } from "./Minimap";
 
 const START_SIGNAL_STEPS = 6;
 const START_SIGNAL_STEP_MS = 620;
@@ -133,9 +134,11 @@ export function GameUI() {
     isCountingDown,
     lap,
     totalLaps,
+    lapTimes,
     playerPosition,
     racerCount,
     raceResults,
+    wrongWay,
     currentLapTime,
     totalRaceTime,
     bestLapTime,
@@ -164,9 +167,11 @@ export function GameUI() {
       isCountingDown: state.isCountingDown,
       lap: state.lap,
       totalLaps: state.totalLaps,
+      lapTimes: state.lapTimes,
       playerPosition: state.playerPosition,
       racerCount: state.racerCount,
       raceResults: state.raceResults,
+      wrongWay: state.wrongWay,
       currentLapTime: state.currentLapTime,
       totalRaceTime: state.totalRaceTime,
       bestLapTime: state.bestLapTime,
@@ -193,6 +198,46 @@ export function GameUI() {
 
   const [showControls, setShowControls] = useState(true);
   const controlsTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Lap-completion toast (PLAN.md · G5/U1): a grown lapTimes array is a closed
+  // lap; a shrink is a race reset and is ignored. Detected via a store
+  // subscription rather than in render or in an effect body — the callback
+  // runs outside the render cycle (safe under Strict/concurrent rendering) and
+  // hands subscribeWithSelector's previous value to the comparison for free.
+  // "New best" compares against the earlier laps of THIS race (lap 1 is
+  // trivially the best so far and gets no tag); the toast for the
+  // second-to-last lap doubles as the "FINAL LAP" callout.
+  const [lapToast, setLapToast] = useState<{
+    lapNo: number;
+    time: number;
+    isBest: boolean;
+    isFinal: boolean;
+  } | null>(null);
+
+  useEffect(
+    () =>
+      useGameStore.subscribe(
+        (state) => state.lapTimes,
+        (times, prevTimes) => {
+          if (times.length === 0 || times.length <= prevTimes.length) return;
+          const time = times[times.length - 1];
+          const priorBest = Math.min(...times.slice(0, -1));
+          setLapToast({
+            lapNo: times.length,
+            time,
+            isBest: times.length > 1 && time < priorBest,
+            isFinal: times.length === useGameStore.getState().totalLaps - 1,
+          });
+        },
+      ),
+    [],
+  );
+
+  useEffect(() => {
+    if (!lapToast) return;
+    const id = setTimeout(() => setLapToast(null), 3500);
+    return () => clearTimeout(id);
+  }, [lapToast]);
 
   useEffect(() => {
     if (isPlaying && showControls) {
@@ -401,8 +446,9 @@ export function GameUI() {
   }
 
   if (gameOver) {
+    const bestRaceLap = lapTimes.length > 0 ? Math.min(...lapTimes) : null;
     return (
-      <div className="absolute inset-0 flex items-center justify-center bg-black/80 z-50">
+      <div className="absolute inset-0 flex items-start md:items-center justify-center bg-black/80 z-50 overflow-y-auto p-4">
         <div className="bg-gradient-to-br from-fuchsia-950 via-slate-950 to-cyan-950 p-8 rounded-2xl shadow-2xl text-center max-w-md border-4 border-fuchsia-400">
           <h1 className="text-5xl font-bold text-white mb-4 drop-shadow-lg">
             <span className="text-yellow-400">RACE</span> COMPLETE!
@@ -429,6 +475,43 @@ export function GameUI() {
               </div>
             )}
           </div>
+
+          {lapTimes.length > 0 && (
+            <div className="bg-black/30 p-4 rounded-lg mb-6 text-left">
+              <h3 className="text-yellow-400 font-bold mb-3 text-center">
+                Lap Times
+              </h3>
+              <div className="space-y-1">
+                {lapTimes.map((time, index) => {
+                  const isBest = time === bestRaceLap;
+                  return (
+                    <div
+                      key={index}
+                      className={`flex items-center gap-2 px-2 py-1 rounded ${
+                        isBest ? "bg-green-500/15" : ""
+                      }`}
+                    >
+                      <span className="text-gray-300 font-mono w-14">
+                        Lap {index + 1}
+                      </span>
+                      <span
+                        className={`flex-1 font-mono ${
+                          isBest ? "text-green-400 font-bold" : "text-white"
+                        }`}
+                      >
+                        {formatTime(time)}
+                      </span>
+                      {isBest && lapTimes.length > 1 && (
+                        <span className="text-green-400 text-xs font-bold">
+                          BEST LAP
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {raceResults.length > 0 && (
             <div className="bg-black/30 p-4 rounded-lg mb-6 text-left">
@@ -566,6 +649,41 @@ export function GameUI() {
           </div>
         )}
       </div>
+
+      <div className="absolute top-28 right-4 z-40 pointer-events-none">
+        <Minimap />
+      </div>
+
+      {wrongWay && (
+        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 z-40 pointer-events-none">
+          <div className="text-4xl md:text-6xl font-black text-red-500 animate-pulse whitespace-nowrap [text-shadow:0_0_30px_#ef4444]">
+            ⚠ WRONG WAY
+          </div>
+        </div>
+      )}
+
+      {lapToast && (
+        <div className="absolute top-24 left-1/2 -translate-x-1/2 z-40 pointer-events-none text-center">
+          <div className="bg-black/70 backdrop-blur-sm rounded-xl px-6 py-3 border-2 border-yellow-400 inline-block">
+            <div className="text-white text-xl font-bold whitespace-nowrap">
+              Lap {lapToast.lapNo} ·{" "}
+              <span className="font-mono text-yellow-300">
+                {formatTime(lapToast.time)}
+              </span>
+            </div>
+            {lapToast.isBest && (
+              <div className="text-green-400 font-black text-sm mt-1 animate-pulse">
+                NEW BEST LAP!
+              </div>
+            )}
+          </div>
+          {lapToast.isFinal && (
+            <div className="mt-3 text-4xl md:text-6xl font-black text-yellow-400 animate-pulse whitespace-nowrap [text-shadow:0_0_30px_#facc15]">
+              FINAL LAP
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="absolute bottom-0 left-0 right-0 p-4 flex justify-between items-end z-40 pointer-events-none">
         <div className="bg-black/60 backdrop-blur-sm rounded-xl p-4 border-2 border-red-400">

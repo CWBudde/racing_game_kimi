@@ -136,7 +136,7 @@ export function AIOpponent({
     // Seed below any real progress so the first frame reads as "advanced" and
     // can't false-trigger stuck recovery against the signed progress metric.
     lastProgressRef.current = -Infinity;
-    updateProgress(id, 1, spawn.t0);
+    updateProgress(id, 1, spawn.t0, spawn.position[0], spawn.position[2]);
   }, [isPlaying, isCountingDown, spawn, id, track.points.length]);
 
   useFrame((_, delta) => {
@@ -189,7 +189,7 @@ export function AIOpponent({
       gateAlongRef.current = null;
       // Teleport-safe: reseed the fraction (no wrap inference) and sync the
       // stuck baseline so the next frame's delta reads ~0.
-      seedProgress(id, t);
+      seedProgress(id, t, p.x, p.z);
       lastProgressRef.current = getRacer(id)?.progress ?? lastProgressRef.current;
       return;
     }
@@ -270,7 +270,7 @@ export function AIOpponent({
       gateAlongRef.current = along;
     }
 
-    updateProgress(id, lapRef.current, t);
+    updateProgress(id, lapRef.current, t, pos.x, pos.z);
 
     // Cosmetic wheel spin.
     wheelRotRef.current += forwardSpeed * dt * 0.5;

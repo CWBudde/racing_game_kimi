@@ -195,6 +195,8 @@ export function useCarPhysics() {
   const sampleIdxRef = useRef<number | null>(null);
   const useItemPressedRef = useRef(false);
   const respawnPressedRef = useRef(false);
+  // Seconds of sustained backward travel along the centerline (wrong-way HUD).
+  const wrongWayTimerRef = useRef(0);
   // Accumulates frame time so the HUD speedometer store write happens at ~10 Hz
   // instead of 60 Hz — the gauge doesn't need per-frame precision and each write
   // re-renders the HUD DOM.
@@ -223,6 +225,7 @@ export function useCarPhysics() {
       gateAlongRef.current = null;
       sampleIdxRef.current = null;
       hudAccumRef.current = 0;
+      wrongWayTimerRef.current = 0;
     }
   }, [isPlaying, selectedTrackId]);
 
@@ -273,8 +276,12 @@ export function useCarPhysics() {
       gateAlongRef.current = null;
       // Teleport-safe progress: reseed the fraction (no wrap inference) so the
       // next updateProgress doesn't misread the jump across the line as a lap.
-      seedProgress("player", idx / pts.length);
+      seedProgress("player", idx / pts.length, p.x, p.z);
       sampleIdxRef.current = idx;
+      // The snap faces the car down the track, so any wrong-way episode ends.
+      wrongWayTimerRef.current = 0;
+      const respawnStore = useGameStore.getState();
+      if (respawnStore.wrongWay) respawnStore.setWrongWay(false);
       respawnPressedRef.current = wantsRespawn;
       return;
     }
@@ -429,9 +436,40 @@ export function useCarPhysics() {
     // Feed the player's continuous progress into the race standings (lap count
     // is authoritative from the store; the fraction orders cars within a lap).
     if (rematched) {
-      seedProgress("player", sample.fraction);
+      seedProgress("player", sample.fraction, pos.x, pos.z);
     } else {
-      updateProgress("player", store.lap, sample.fraction);
+      updateProgress("player", store.lap, sample.fraction, pos.x, pos.z);
+    }
+
+    // Wrong-way detection (G5): project the velocity onto the centerline
+    // tangent at the matched sample. Only *sustained* backward travel trips the
+    // warning — a spin or a nose-out three-point turn shouldn't flash it.
+    // Clear forward travel resets immediately; the neutral zone in between
+    // (stopped, or crawling out of a wall) decays the timer instead of holding
+    // it, so the banner can't stay latched once backing has ended. The sticky
+    // sample keeps the tangent on the car's own leg of a self-crossing layout.
+    {
+      const pts = trackLayout.points;
+      const nPt = pts[(sample.index + 1) % pts.length];
+      const pPt = pts[(sample.index - 1 + pts.length) % pts.length];
+      let tanX = nPt.x - pPt.x;
+      let tanZ = nPt.z - pPt.z;
+      const tanLen = Math.hypot(tanX, tanZ) || 1;
+      tanX /= tanLen;
+      tanZ /= tanLen;
+      const vel = car.linvel();
+      const alongTrack = vel.x * tanX + vel.z * tanZ;
+      if (alongTrack < -3) {
+        // Cap the accumulation so a long reverse can't bank so much timer
+        // that the neutral-zone decay below takes seconds to clear it.
+        wrongWayTimerRef.current = Math.min(wrongWayTimerRef.current + dt, 1.5);
+      } else if (alongTrack > 1) {
+        wrongWayTimerRef.current = 0;
+      } else {
+        wrongWayTimerRef.current = Math.max(0, wrongWayTimerRef.current - dt);
+      }
+      const wrongWay = wrongWayTimerRef.current > 0.7;
+      if (wrongWay !== store.wrongWay) store.setWrongWay(wrongWay);
     }
 
     // Toggle exhaust visibility directly instead of via React state, which used

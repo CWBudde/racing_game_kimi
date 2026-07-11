@@ -308,15 +308,18 @@ Progress markers: ✅ done · 🚧 in progress · ⬜ not started.
       matched to their own leg (progress, steering, off-track detection)
 - [x] Orientation-independent road winding (a CW control loop used to render face-down)
 
-#### 2.3 · G5 / U1 — Race-craft HUD
-- [ ] Minimap: draw the center line to a small canvas with a dot per car
-- [ ] Wrong-way detection + warning
-- [ ] Lap-time toast on crossing the line
-- [ ] "Final lap" callout
+#### 2.3 · G5 / U1 — Race-craft HUD ✅
+- [x] Minimap: draw the center line to a small canvas with a dot per car
+      (`Minimap.tsx` — rAF-driven DOM canvas reading `raceStandings`/`carTransform`,
+      zero React re-renders; standings now carry each car's world XZ)
+- [x] Wrong-way detection + warning (velocity projected on the centerline tangent;
+      sustained backward travel trips a store flag, forward travel clears it)
+- [x] Lap-time toast on crossing the line (+ "NEW BEST LAP!" vs earlier laps this race)
+- [x] "Final lap" callout (rides the toast for the second-to-last lap)
 
-#### 2.4 · U2 — Lap-time breakdown on results
-- [ ] Render the already-stored `lapTimes` as a per-lap list on the results screen
-- [ ] Highlight "new best lap!"
+#### 2.4 · U2 — Lap-time breakdown on results ✅
+- [x] Render the already-stored `lapTimes` as a per-lap list on the results screen
+- [x] Highlight the best lap ("BEST LAP" tag; in-race toast flags "new best")
 
 #### 2.5 · A1 / A2 — Engine sound + core SFX
 - [ ] Engine loop pitched by speed (WebAudio oscillator or looped sample)
@@ -383,6 +386,7 @@ Progress markers: ✅ done · 🚧 in progress · ⬜ not started.
 - [ ] Settings panel: shadows on/off, DPR cap, camera distance/FOV, colorblind-safe kerbs
 
 **Suggested order of attack:** Phase 0 (correctness) and Phase 1 (performance) are done. Phase 2
-turns the prototype into an actual race (AI positions, off-track cost, HUD, sound) and is the next
-highest-value work — start with **2.1 (G2)** since 2.3/2.4 depend on real race positions. Phase 3
-is the depth-and-delight payoff; Phase 4 code-health items can run alongside everything.
+turns the prototype into an actual race — AI positions (2.1), off-track cost (2.2), forest courses
+(2.6), and the race-craft HUD (2.3/2.4) have landed; **2.5 (audio)** is the remaining Phase 2 item
+and the next thing to build. Phase 3 is the depth-and-delight payoff; Phase 4 code-health items can
+run alongside everything.

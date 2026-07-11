@@ -148,6 +148,7 @@ export interface GameState {
   playerPosition: number; // 1-based, 0 before a race starts
   racerCount: number; // total cars in the race (player + AI)
   raceResults: RaceResult[]; // finishing order, populated at race end
+  wrongWay: boolean; // sustained backward travel along the track (HUD warning)
 
   // Car stats
   speed: number;
@@ -164,6 +165,7 @@ export interface GameState {
   setDifficulty: (difficulty: Difficulty) => void;
   updateRacePosition: (position: number, count: number) => void;
   setRaceResults: (results: RaceResult[]) => void;
+  setWrongWay: (wrongWay: boolean) => void;
   beginCountdown: () => void;
   startGame: () => void;
   pauseGame: () => void;
@@ -197,6 +199,7 @@ const resetRaceState = (trackId: string) => {
     playerPosition: 0,
     racerCount: 0,
     raceResults: [],
+    wrongWay: false,
     speed: 0,
     boostAmount: 100,
     hasItem: false,
@@ -230,6 +233,7 @@ export const useGameStore = create<GameState>()(
     playerPosition: 0,
     racerCount: 0,
     raceResults: [],
+    wrongWay: false,
 
     speed: 0,
     maxSpeed: TOP_SPEED_KMH,
@@ -275,6 +279,10 @@ export const useGameStore = create<GameState>()(
       set({ playerPosition: position, racerCount: count }),
 
     setRaceResults: (results) => set({ raceResults: results }),
+
+    // Callers only invoke this on transitions, so the HUD re-renders twice per
+    // wrong-way episode instead of every frame.
+    setWrongWay: (wrongWay) => set({ wrongWay }),
 
     beginCountdown: () =>
       set((state) => ({

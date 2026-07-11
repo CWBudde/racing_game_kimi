@@ -22,6 +22,8 @@ export interface RacerState {
   wraps: number; // integer line crossings, for the continuous progress
   finishTime: number | null; // race time (s) when the final lap was closed
   position: number; // 1-based, filled by recomputeStandings()
+  x: number; // world XZ, written with each progress update (feeds the minimap)
+  z: number;
 }
 
 export interface RacerSeed {
@@ -52,6 +54,10 @@ export function initStandings(seeds: RacerSeed[]): void {
       progress: wraps + s.startFrac,
       finishTime: null,
       position: 0,
+      // Filled by the first per-frame progress write; NaN tells the minimap
+      // "no pose yet" so it skips the dot instead of drawing at the origin.
+      x: NaN,
+      z: NaN,
     };
   });
 }
@@ -63,7 +69,13 @@ export function getRacer(id: string): RacerState | undefined {
 // Per-frame progress write from a car's own useFrame. No-op before the roster is
 // registered. Detects the fraction wrapping across the start/finish line to keep
 // `progress` continuous and monotonic.
-export function updateProgress(id: string, lap: number, fraction: number): void {
+export function updateProgress(
+  id: string,
+  lap: number,
+  fraction: number,
+  x: number,
+  z: number,
+): void {
   const car = getRacer(id);
   if (!car) return;
   const delta = fraction - car.frac;
@@ -72,17 +84,28 @@ export function updateProgress(id: string, lap: number, fraction: number): void 
   car.frac = fraction;
   car.progress = car.wraps + fraction;
   car.lap = lap;
+  car.x = x;
+  car.z = z;
 }
 
 // Teleport-safe progress reseed. After a respawn snaps a car to a new point on
 // the centerline, its fraction can jump across the start/finish line; calling
 // updateProgress then would misread that jump as a lap wrap. Seed the stored
 // fraction (leaving `wraps` untouched) so the next updateProgress sees delta ≈ 0.
-export function seedProgress(id: string, fraction: number): void {
+export function seedProgress(
+  id: string,
+  fraction: number,
+  x?: number,
+  z?: number,
+): void {
   const car = getRacer(id);
   if (!car) return;
   car.frac = fraction;
   car.progress = car.wraps + fraction;
+  if (x !== undefined && z !== undefined) {
+    car.x = x;
+    car.z = z;
+  }
 }
 
 export function stampFinish(id: string, finishTime: number): void {
