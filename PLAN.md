@@ -283,7 +283,7 @@ Progress markers: ✅ done · 🚧 in progress · ⬜ not started.
 #### 1.6 · B10 — Frame-rate-independent smoothing ✅
 - [x] Use exponential-decay (`1 - pow(k, dt)`) for camera, chassis tilt, and countdown camera
 
-### Phase 2 — Make it a race 🟡 — 🚧 in progress
+### Phase 2 — Make it a race 🟡 — ✅ **complete**
 
 #### 2.1 · G2 — AI that actually races ✅
 - [x] Give each AI a progress + lap counter (reuse the B2 checkpoint model)
@@ -321,11 +321,15 @@ Progress markers: ✅ done · 🚧 in progress · ⬜ not started.
 - [x] Render the already-stored `lapTimes` as a per-lap list on the results screen
 - [x] Highlight the best lap ("BEST LAP" tag; in-race toast flags "new best")
 
-#### 2.5 · A1 / A2 — Engine sound + core SFX
-- [ ] Engine loop pitched by speed (WebAudio oscillator or looped sample)
-- [ ] Countdown beeps matched to the light steps
-- [ ] Collision thud, item pickup/use, boost hiss
-- [ ] Lap / final-lap chime, race-finish sting
+#### 2.5 · A1 / A2 — Engine sound + core SFX ✅
+- [x] Engine loop pitched by speed (`audio/audioEngine.ts` — saw + sub-square
+      through a lowpass, all synthesized, zero audio assets; idles on the grid
+      during the countdown, silent on pause/menus)
+- [x] Countdown beeps matched to the light steps (higher, longer "GO")
+- [x] Collision thud (player `onCollisionEnter`, floor contacts filtered by
+      normal, scaled by impact speed), item pickup/use, boost hiss
+- [x] Lap / final-lap chime, race-finish sting (`audio/AudioDirector.tsx`
+      bridges store transitions to SFX; AudioContext unlocked on first gesture)
 
 ### Phase 3 — Depth & delight 🟢 — ⬜ not started
 
@@ -385,8 +389,8 @@ Progress markers: ✅ done · 🚧 in progress · ⬜ not started.
 - [ ] Show the "controls" hint once per session, not every un-pause
 - [ ] Settings panel: shadows on/off, DPR cap, camera distance/FOV, colorblind-safe kerbs
 
-**Suggested order of attack:** Phase 0 (correctness) and Phase 1 (performance) are done. Phase 2
-turns the prototype into an actual race — AI positions (2.1), off-track cost (2.2), forest courses
-(2.6), and the race-craft HUD (2.3/2.4) have landed; **2.5 (audio)** is the remaining Phase 2 item
-and the next thing to build. Phase 3 is the depth-and-delight payoff; Phase 4 code-health items can
-run alongside everything.
+**Suggested order of attack:** Phases 0–2 are done — the prototype is now an actual race with
+AI positions (2.1), off-track cost (2.2), forest courses (2.6), a race-craft HUD (2.3/2.4), and
+core audio (2.5). **Phase 3 (depth & delight) is next** — items rework (3.1), car select (3.2),
+music + audio settings (3.4), and track-select polish (3.5) are the highest perceived-value picks;
+Phase 4 code-health items can run alongside everything.

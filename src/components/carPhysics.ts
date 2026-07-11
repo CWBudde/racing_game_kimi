@@ -18,6 +18,12 @@ import {
 import { smoothAlpha } from "./smoothing";
 import { applyKartForces } from "./kartForces";
 import {
+  engineStart,
+  engineStop,
+  engineUpdate,
+  setBoostHiss,
+} from "../audio/audioEngine";
+import {
   buildGates,
   gateAlong,
   gateLateral,
@@ -235,6 +241,15 @@ export function useCarPhysics() {
     if (isPaused || !isPlaying) resetKeys();
   }, [isPaused, isPlaying]);
 
+  // Engine loop: idling on the grid through the countdown, pitched by speed
+  // while racing (per-frame engineUpdate below), silent on pause/menus/results.
+  useEffect(() => {
+    if ((isPlaying && !isPaused) || isCountingDown) {
+      engineStart();
+      return () => engineStop();
+    }
+  }, [isPlaying, isPaused, isCountingDown]);
+
   useKeyboardInput();
 
   useFrame((_, delta) => {
@@ -432,6 +447,11 @@ export function useCarPhysics() {
     carTransform.yaw = finalYaw;
     carTransform.speedKmh = speedKmh;
     carTransform.offTrack = offTrack;
+
+    // Engine pitch tracks the unboosted top speed (boost revs past 1.0); the
+    // hiss layer follows the actual boost-burn state.
+    engineUpdate(speedKmh / (MAX_SPEED * 3.6), throttleInput);
+    setBoostHiss(boostOn);
 
     // Feed the player's continuous progress into the race standings (lap count
     // is authoritative from the store; the fraction orders cars within a lap).

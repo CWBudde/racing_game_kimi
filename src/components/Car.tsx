@@ -1,7 +1,12 @@
-import { useMemo } from "react";
-import { RigidBody, CuboidCollider } from "@react-three/rapier";
+import { useCallback, useMemo } from "react";
+import {
+  RigidBody,
+  CuboidCollider,
+  type CollisionEnterPayload,
+} from "@react-three/rapier";
 import { useCarPhysics } from "./carPhysics";
 import { CAR_MASS } from "./carConstants";
+import { playCollision } from "../audio/audioEngine";
 
 interface CarProps {
   position?: [number, number, number];
@@ -9,6 +14,22 @@ interface CarProps {
 
 export function Car({ position = [0, 2, 0] }: CarProps) {
   const { carRef, chassisRef, wheelsRef, exhaustRef } = useCarPhysics();
+
+  // Collision thud (PLAN.md · A2). Floor contacts — the spawn drop, kerbs,
+  // rejoining after a jump — have a mostly-vertical contact normal, so only
+  // near-horizontal hits (barriers, trees, other cars) make a sound, scaled by
+  // how fast the car was moving when it connected.
+  const handleCollision = useCallback(
+    (payload: CollisionEnterPayload) => {
+      const normal = payload.manifold?.normal();
+      if (normal && Math.abs(normal.y) > 0.6) return;
+      const vel = carRef.current?.linvel();
+      const speed = vel ? Math.hypot(vel.x, vel.z) : 0;
+      if (speed < 4) return;
+      playCollision(speed / 30);
+    },
+    [carRef],
+  );
 
   // Built once — previously an inline IIFE in JSX rebuilt a canvas + texture on
   // every render (and the car re-rendered every frame before P1).
@@ -39,6 +60,7 @@ export function Car({ position = [0, 2, 0] }: CarProps) {
       enabledRotations={[false, true, false]}
       restitution={0.3}
       friction={0.7}
+      onCollisionEnter={handleCollision}
     >
       <group ref={chassisRef}>
         {/* Main chassis */}
