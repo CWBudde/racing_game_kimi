@@ -13,6 +13,7 @@ import { MobileController } from "./components/MobileController";
 import { useGameStore } from "./store/gameStore";
 import { AI_ROSTER } from "./components/aiRoster";
 import { RaceDirector } from "./components/RaceDirector";
+import { AudioDirector } from "./audio/AudioDirector";
 import "./App.css";
 
 function GameScene() {
@@ -142,6 +143,9 @@ function App() {
       {/* UI Overlay */}
       <GameUI />
       <MobileController />
+
+      {/* Audio: gesture unlock + store-transition SFX (renders nothing) */}
+      <AudioDirector />
     </div>
   );
 }

@@ -3,6 +3,7 @@ import { useShallow } from "zustand/react/shallow";
 import { TRACKS } from "./trackData";
 import { ITEM_INFO, useGameStore } from "../store/gameStore";
 import { Minimap } from "./Minimap";
+import { playCountdownBeep } from "../audio/audioEngine";
 
 const START_SIGNAL_STEPS = 6;
 const START_SIGNAL_STEP_MS = 620;
@@ -15,10 +16,15 @@ function CountdownOverlay() {
     let current = 0;
     let timeoutId: ReturnType<typeof setTimeout>;
 
+    // First red light is already lit at mount; the last step is the green "GO"
+    // (playCountdownBeep self-dedupes Strict mode's double effect run).
+    playCountdownBeep(false);
+
     const tick = () => {
       current++;
       if (current < START_SIGNAL_STEPS) {
         setPhase(current);
+        playCountdownBeep(current === START_SIGNAL_STEPS - 1);
         timeoutId = setTimeout(tick, START_SIGNAL_STEP_MS);
       } else {
         startGame();

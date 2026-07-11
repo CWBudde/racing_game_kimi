@@ -54,4 +54,4 @@ HTML overlay (no Three.js). Renders start screen, pause screen, game-over screen
 - **Lap progression**: `completeLap()` exists in the store but is never called — no checkpoint collision detection is wired.
 - **Item pickups**: `ItemBox` components are sensor RigidBodies but no collision handler calls `collectItem()`/`useItem()`.
 - **Item effects**: `useItem()` clears state but applies no gameplay effect.
-- No AI opponents, no audio.
+- No music yet — synthesized engine/SFX audio exists in `src/audio/` (PLAN.md 2.5); music + volume settings are PLAN.md 3.4. (NB: much of this section is stale — laps, items, and AI opponents all exist now; see PLAN.md C1.)
