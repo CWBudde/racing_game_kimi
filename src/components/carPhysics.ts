@@ -443,9 +443,11 @@ export function useCarPhysics() {
 
     // Wrong-way detection (G5): project the velocity onto the centerline
     // tangent at the matched sample. Only *sustained* backward travel trips the
-    // warning — a spin or a nose-out three-point turn shouldn't flash it — and
-    // clear forward travel clears it immediately. The sticky sample keeps the
-    // tangent on the car's own leg of a self-crossing layout.
+    // warning — a spin or a nose-out three-point turn shouldn't flash it.
+    // Clear forward travel resets immediately; the neutral zone in between
+    // (stopped, or crawling out of a wall) decays the timer instead of holding
+    // it, so the banner can't stay latched once backing has ended. The sticky
+    // sample keeps the tangent on the car's own leg of a self-crossing layout.
     {
       const pts = trackLayout.points;
       const nPt = pts[(sample.index + 1) % pts.length];
@@ -458,9 +460,13 @@ export function useCarPhysics() {
       const vel = car.linvel();
       const alongTrack = vel.x * tanX + vel.z * tanZ;
       if (alongTrack < -3) {
-        wrongWayTimerRef.current += dt;
+        // Cap the accumulation so a long reverse can't bank so much timer
+        // that the neutral-zone decay below takes seconds to clear it.
+        wrongWayTimerRef.current = Math.min(wrongWayTimerRef.current + dt, 1.5);
       } else if (alongTrack > 1) {
         wrongWayTimerRef.current = 0;
+      } else {
+        wrongWayTimerRef.current = Math.max(0, wrongWayTimerRef.current - dt);
       }
       const wrongWay = wrongWayTimerRef.current > 0.7;
       if (wrongWay !== store.wrongWay) store.setWrongWay(wrongWay);

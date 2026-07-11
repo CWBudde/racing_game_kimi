@@ -199,8 +199,11 @@ export function GameUI() {
   const [showControls, setShowControls] = useState(true);
   const controlsTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Lap-completion toast (PLAN.md · G5/U1): fires whenever a lap lands in
-  // lapTimes, detected with the adjust-state-during-render pattern (no effect).
+  // Lap-completion toast (PLAN.md · G5/U1): a grown lapTimes array is a closed
+  // lap; a shrink is a race reset and is ignored. Detected via a store
+  // subscription rather than in render or in an effect body — the callback
+  // runs outside the render cycle (safe under Strict/concurrent rendering) and
+  // hands subscribeWithSelector's previous value to the comparison for free.
   // "New best" compares against the earlier laps of THIS race (lap 1 is
   // trivially the best so far and gets no tag); the toast for the
   // second-to-last lap doubles as the "FINAL LAP" callout.
@@ -210,22 +213,25 @@ export function GameUI() {
     isBest: boolean;
     isFinal: boolean;
   } | null>(null);
-  const [prevLapCount, setPrevLapCount] = useState(lapTimes.length);
 
-  if (lapTimes.length !== prevLapCount) {
-    setPrevLapCount(lapTimes.length);
-    // A shrink means the race state was reset; only growth is a completed lap.
-    if (lapTimes.length > prevLapCount && lapTimes.length > 0) {
-      const time = lapTimes[lapTimes.length - 1];
-      const priorBest = Math.min(...lapTimes.slice(0, -1));
-      setLapToast({
-        lapNo: lapTimes.length,
-        time,
-        isBest: lapTimes.length > 1 && time < priorBest,
-        isFinal: lapTimes.length === totalLaps - 1,
-      });
-    }
-  }
+  useEffect(
+    () =>
+      useGameStore.subscribe(
+        (state) => state.lapTimes,
+        (times, prevTimes) => {
+          if (times.length === 0 || times.length <= prevTimes.length) return;
+          const time = times[times.length - 1];
+          const priorBest = Math.min(...times.slice(0, -1));
+          setLapToast({
+            lapNo: times.length,
+            time,
+            isBest: times.length > 1 && time < priorBest,
+            isFinal: times.length === useGameStore.getState().totalLaps - 1,
+          });
+        },
+      ),
+    [],
+  );
 
   useEffect(() => {
     if (!lapToast) return;
@@ -440,6 +446,7 @@ export function GameUI() {
   }
 
   if (gameOver) {
+    const bestRaceLap = lapTimes.length > 0 ? Math.min(...lapTimes) : null;
     return (
       <div className="absolute inset-0 flex items-start md:items-center justify-center bg-black/80 z-50 overflow-y-auto p-4">
         <div className="bg-gradient-to-br from-fuchsia-950 via-slate-950 to-cyan-950 p-8 rounded-2xl shadow-2xl text-center max-w-md border-4 border-fuchsia-400">
@@ -476,7 +483,7 @@ export function GameUI() {
               </h3>
               <div className="space-y-1">
                 {lapTimes.map((time, index) => {
-                  const isBest = time === Math.min(...lapTimes);
+                  const isBest = time === bestRaceLap;
                   return (
                     <div
                       key={index}
